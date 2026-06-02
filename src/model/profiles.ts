@@ -40,7 +40,7 @@ export const builtInProfiles: LetterheadProfile[] = [
       "4234 ILLINOIS AVE #351",
       "FORT LEONARD WOOD, MO 65473"
     ],
-    sealAssetPath: "assets/seals/placeholder.svg",
+    sealAssetPath: "assets/seals/dod-seal.png",
     sealImageDataUrl: null,
     defaultOfficeSymbol: "MCXP-DCCS",
     defaultFont: "Arial",

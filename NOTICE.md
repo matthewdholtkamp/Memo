@@ -5,7 +5,7 @@ official Army system, does not provide records-management advice, and does not a
 CAC-secured digital signatures. Users remain responsible for organizational review, records handling,
 signature workflows, and compliance with the controlling edition of AR 25-50.
 
-The public deployment uses a neutral placeholder rather than distributing a Department of Defense
-seal. Official marks are not licensed under the repository's MIT License. Public use of official marks
-requires organizational review. Users with authorized official-use letterhead may rely on local seal
-upload.
+The public deployment includes a Department of Defense seal for authorized government official-use
+letterhead workflows. Official marks are not licensed under the repository's MIT License. Inclusion
+does not imply endorsement of this independent formatting aid. Users remain responsible for ensuring
+that use of official marks is appropriate for their organization. Local seal upload is also available.

@@ -11,7 +11,7 @@ describe("profile helpers", () => {
   it("ships the current GLWCH DCCS letterhead profile", () => {
     expect(builtInProfiles[0]).toMatchObject({
       displayName: "GLWCH / DCCS",
-      sealAssetPath: "assets/seals/placeholder.svg",
+      sealAssetPath: "assets/seals/dod-seal.png",
       orgLines: [
         "DEPARTMENT OF THE ARMY",
         "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",

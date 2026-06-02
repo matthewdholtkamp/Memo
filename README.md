@@ -51,5 +51,6 @@ Before release, open representative generated files in Microsoft Word and verify
 
 ## Official Marks
 
-See [NOTICE.md](NOTICE.md). The public deployment uses a neutral placeholder. Authorized users may
-upload an approved local seal without transmitting it to a backend.
+See [NOTICE.md](NOTICE.md). The GLWCH profile includes a Department of Defense seal for authorized
+government official-use letterhead. The generic profile remains neutral, and authorized users may
+upload another approved local seal without transmitting it to a backend.
