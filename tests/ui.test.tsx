@@ -2,8 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import App from "../src/App";
-import { formatMemoDate } from "../src/model/defaultSpec";
-import { DRAFT_STORAGE_KEY } from "../src/model/drafts";
+import { createDefaultSpec, formatMemoDate } from "../src/model/defaultSpec";
+import { DRAFT_STORAGE_KEY, saveActiveDraft } from "../src/model/drafts";
 
 describe("ArmyMemo editor", () => {
   beforeEach(() => {
@@ -73,6 +73,20 @@ describe("ArmyMemo editor", () => {
   it("shows the selected profile seal in the structural preview", () => {
     render(<App />);
     expect(screen.getByAltText("Authorized letterhead seal")).toBeInTheDocument();
+  });
+
+  it("refreshes a restored built-in letterhead snapshot", () => {
+    const staleSpec = createDefaultSpec();
+    staleSpec.letterhead = {
+      ...staleSpec.letterhead,
+      sealAssetPath: "assets/seals/placeholder.svg"
+    };
+    saveActiveDraft(staleSpec, []);
+    render(<App />);
+    expect(screen.getByAltText("Authorized letterhead seal")).toHaveAttribute(
+      "src",
+      expect.stringContaining("assets/seals/dod-seal.png")
+    );
   });
 
   it("expands the preview and restores focus after Escape", async () => {

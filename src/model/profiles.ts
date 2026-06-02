@@ -5,6 +5,7 @@ import {
   signerPresetSchema,
   type LetterheadSnapshot,
   type MemoFont,
+  type MemoSpec,
   type SignerPreset
 } from "./memoSpec";
 
@@ -70,6 +71,11 @@ export function profileToSnapshot(profile: LetterheadProfile): LetterheadSnapsho
     sealAssetPath: profile.sealAssetPath,
     sealImageDataUrl: profile.sealImageDataUrl
   });
+}
+
+export function refreshBuiltInLetterhead(spec: MemoSpec): MemoSpec {
+  const profile = builtInProfiles.find(({ id }) => id === spec.profileId);
+  return profile ? { ...spec, letterhead: profileToSnapshot(profile) } : spec;
 }
 
 export function exportProfile(profile: LetterheadProfile): string {

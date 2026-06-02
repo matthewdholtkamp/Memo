@@ -22,6 +22,7 @@ import {
   exportProfile,
   importProfile,
   profileToSnapshot,
+  refreshBuiltInLetterhead,
   type LetterheadProfile
 } from "./model/profiles";
 import { imageFileToDataUrl, materializeBundledSeal } from "./model/seals";
@@ -262,7 +263,9 @@ export default function App() {
   const [importedProfiles, setImportedProfiles] = useState<LetterheadProfile[]>(
     restored?.importedProfiles ?? []
   );
-  const [spec, setSpec] = useState<MemoSpec>(restored?.spec ?? createDefaultSpec());
+  const [spec, setSpec] = useState<MemoSpec>(() =>
+    refreshBuiltInLetterhead(restored?.spec ?? createDefaultSpec())
+  );
   const [blocks, setBlocks] = useState<EditorBlock[]>(() => flattenParagraphs(spec.paragraphs));
   const [feedback, setFeedback] = useState("Draft autosaves locally as you work.");
   const [spacingProposal, setSpacingProposal] = useState<MemoSpec | null>(null);
@@ -293,8 +296,9 @@ export default function App() {
   }, [currentSpec, importedProfiles]);
 
   const loadSpec = (nextSpec: MemoSpec) => {
-    setSpec(nextSpec);
-    setBlocks(flattenParagraphs(nextSpec.paragraphs));
+    const refreshedSpec = refreshBuiltInLetterhead(nextSpec);
+    setSpec(refreshedSpec);
+    setBlocks(flattenParagraphs(refreshedSpec.paragraphs));
   };
   const updateCustomProfile = (update: Partial<LetterheadProfile>) => {
     if (!customProfile) return;
