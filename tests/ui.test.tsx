@@ -81,12 +81,22 @@ describe("ArmyMemo editor", () => {
       ...staleSpec.letterhead,
       sealAssetPath: "assets/seals/placeholder.svg"
     };
+    staleSpec.officeSymbol = "MCXP-DCCS";
     saveActiveDraft(staleSpec, []);
     render(<App />);
     expect(screen.getByAltText("Authorized letterhead seal")).toHaveAttribute(
       "src",
       expect.stringContaining("assets/seals/dod-seal.png")
     );
+    expect(screen.getByLabelText("Office symbol")).toHaveValue("MCXP-CCS");
+  });
+
+  it("preserves an edited office symbol when refreshing built-in defaults", () => {
+    const savedSpec = createDefaultSpec();
+    savedSpec.officeSymbol = "MCXP-CUSTOM";
+    saveActiveDraft(savedSpec, []);
+    render(<App />);
+    expect(screen.getByLabelText("Office symbol")).toHaveValue("MCXP-CUSTOM");
   });
 
   it("expands the preview and restores focus after Escape", async () => {

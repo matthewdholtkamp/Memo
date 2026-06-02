@@ -43,7 +43,7 @@ export const builtInProfiles: LetterheadProfile[] = [
     ],
     sealAssetPath: "assets/seals/dod-seal.png",
     sealImageDataUrl: null,
-    defaultOfficeSymbol: "MCXP-DCCS",
+    defaultOfficeSymbol: "MCXP-CCS",
     defaultFont: "Arial",
     signerPresets: []
   },
@@ -73,9 +73,14 @@ export function profileToSnapshot(profile: LetterheadProfile): LetterheadSnapsho
   });
 }
 
-export function refreshBuiltInLetterhead(spec: MemoSpec): MemoSpec {
+export function refreshBuiltInProfileDefaults(spec: MemoSpec): MemoSpec {
   const profile = builtInProfiles.find(({ id }) => id === spec.profileId);
-  return profile ? { ...spec, letterhead: profileToSnapshot(profile) } : spec;
+  if (!profile) return spec;
+  const officeSymbol =
+    spec.profileId === "glwach-dccs" && spec.officeSymbol === "MCXP-DCCS"
+      ? profile.defaultOfficeSymbol
+      : spec.officeSymbol;
+  return { ...spec, letterhead: profileToSnapshot(profile), officeSymbol };
 }
 
 export function exportProfile(profile: LetterheadProfile): string {

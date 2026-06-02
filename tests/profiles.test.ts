@@ -12,6 +12,7 @@ describe("profile helpers", () => {
     expect(builtInProfiles[0]).toMatchObject({
       displayName: "GLWCH / DCCS",
       sealAssetPath: "assets/seals/dod-seal.png",
+      defaultOfficeSymbol: "MCXP-CCS",
       orgLines: [
         "DEPARTMENT OF THE ARMY",
         "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",
