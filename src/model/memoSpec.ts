@@ -8,6 +8,9 @@ export type MemoType = z.infer<typeof memoTypeSchema>;
 export const fontSchema = z.enum(["Arial", "Times New Roman"]);
 export type MemoFont = z.infer<typeof fontSchema>;
 
+export const letterheadStyleSchema = z.enum(["dha", "army"]);
+export type LetterheadStyle = z.infer<typeof letterheadStyleSchema>;
+
 export const signerPresetSchema = z.object({
   name: z.string(),
   rankBranch: z.string(),
@@ -19,7 +22,8 @@ export const letterheadSnapshotSchema = z.object({
   displayName: z.string(),
   orgLines: z.array(z.string()).min(1),
   sealAssetPath: z.string().nullable(),
-  sealImageDataUrl: z.string().nullable()
+  sealImageDataUrl: z.string().nullable(),
+  letterheadStyle: letterheadStyleSchema.default("dha")
 });
 export type LetterheadSnapshot = z.infer<typeof letterheadSnapshotSchema>;
 

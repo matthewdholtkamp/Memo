@@ -1,25 +1,70 @@
 import { describe, expect, it } from "vitest";
+import { createDefaultSpec } from "../src/model/defaultSpec";
 import { imageFileToDataUrl } from "../src/model/seals";
 import {
   builtInProfiles,
   createCustomProfile,
   exportProfile,
-  importProfile
+  importProfile,
+  refreshBuiltInProfileDefaults
 } from "../src/model/profiles";
 
+const SHARED_HOSPITAL_ADDRESS = [
+  "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",
+  "4234 ILLINOIS AVE #351",
+  "FORT LEONARD WOOD, MO 65473"
+];
+
 describe("profile helpers", () => {
-  it("ships the current GLWCH DCCS letterhead profile", () => {
+  it("ships only the DHA and Army letterhead choices with the shared hospital address", () => {
+    expect(builtInProfiles.map((profile) => profile.displayName)).toEqual(["DHA", "Army"]);
+    expect(builtInProfiles.map((profile) => profile.id)).toEqual([
+      "glwch-dha",
+      "glwch-army"
+    ]);
     expect(builtInProfiles[0]).toMatchObject({
-      displayName: "GLWCH / DCCS",
-      sealAssetPath: "assets/seals/dod-seal.png",
+      displayName: "DHA",
+      sealAssetPath: "assets/seals/dha-seal.png",
+      letterheadStyle: "dha",
       defaultOfficeSymbol: "MCXP-CCS",
-      orgLines: [
-        "DEPARTMENT OF THE ARMY",
-        "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",
-        "4234 ILLINOIS AVE #351",
-        "FORT LEONARD WOOD, MO 65473"
-      ]
+      orgLines: ["DEFENSE HEALTH AGENCY", ...SHARED_HOSPITAL_ADDRESS]
     });
+    expect(builtInProfiles[1]).toMatchObject({
+      displayName: "Army",
+      sealAssetPath: "assets/seals/army-seal.png",
+      letterheadStyle: "army",
+      defaultOfficeSymbol: "MCXP-CCS",
+      orgLines: ["DEPARTMENT OF THE ARMY", ...SHARED_HOSPITAL_ADDRESS]
+    });
+  });
+
+  it("defaults new memos to DHA", () => {
+    const spec = createDefaultSpec();
+    expect(spec.profileId).toBe("glwch-dha");
+    expect(spec.letterhead.displayName).toBe("DHA");
+    expect(spec.letterhead.letterheadStyle).toBe("dha");
+  });
+
+  it("migrates old and unsupported profiles back to DHA", () => {
+    const oldGlwachSpec = createDefaultSpec(builtInProfiles[1]);
+    oldGlwachSpec.profileId = "glwach-dccs";
+    oldGlwachSpec.officeSymbol = "MCXP-DCCS";
+    const migrated = refreshBuiltInProfileDefaults(oldGlwachSpec);
+
+    expect(migrated.profileId).toBe("glwch-dha");
+    expect(migrated.officeSymbol).toBe("MCXP-CCS");
+    expect(migrated.letterhead.orgLines).toEqual([
+      "DEFENSE HEALTH AGENCY",
+      ...SHARED_HOSPITAL_ADDRESS
+    ]);
+
+    const unsupportedSpec = createDefaultSpec(builtInProfiles[1]);
+    unsupportedSpec.profileId = "generic-army";
+    unsupportedSpec.officeSymbol = "MCXP-CUSTOM";
+    const fallback = refreshBuiltInProfileDefaults(unsupportedSpec);
+
+    expect(fallback.profileId).toBe("glwch-dha");
+    expect(fallback.officeSymbol).toBe("MCXP-CUSTOM");
   });
 
   it("round-trips imported profile JSON", () => {

@@ -35,6 +35,7 @@ import {
   SINGLE_LINE,
   paragraphLabel
 } from "./format";
+import type { LetterheadStyle } from "../model/memoSpec";
 
 const noBorders = {
   top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -47,8 +48,14 @@ const noBorders = {
 
 const EMUS_PER_INCH = 914400;
 const LETTERHEAD_FONT_SIZE_PT = 10;
-const LETTERHEAD_SEAL_OFFSET = Math.round(EMUS_PER_INCH * 0.5);
-const LETTERHEAD_SEAL_SIZE = 96;
+const ARMY_SEAL_OFFSET = Math.round(EMUS_PER_INCH * 0.5);
+const ARMY_SEAL_SIZE = 96;
+const DHA_SEAL_SIZE = 126;
+const DHA_SEAL_LEFT_OFFSET = Math.round(
+  EMUS_PER_INCH * ((PAGE_WIDTH / 1440 - DHA_SEAL_SIZE / 96) / 2)
+);
+const DHA_SEAL_TOP_OFFSET = Math.round(EMUS_PER_INCH * 0.34);
+const DHA_LETTERHEAD_COLOR = "1F3864";
 const FIRST_PAGE_BODY_SPACER_PARAGRAPHS = 3;
 
 function run(
@@ -102,33 +109,45 @@ function dataUrlToImage(dataUrl: string): {
   return { data: bytes, type: match[1] === "png" ? "png" : "jpg" };
 }
 
+function createLetterheadSeal(
+  image: { data: Uint8Array; type: "png" | "jpg" },
+  style: LetterheadStyle
+): ImageRun {
+  const isDha = style === "dha";
+  return new ImageRun({
+    type: image.type,
+    data: image.data,
+    transformation: {
+      width: isDha ? DHA_SEAL_SIZE : ARMY_SEAL_SIZE,
+      height: isDha ? DHA_SEAL_SIZE : ARMY_SEAL_SIZE
+    },
+    floating: {
+      horizontalPosition: {
+        relative: HorizontalPositionRelativeFrom.PAGE,
+        offset: isDha ? DHA_SEAL_LEFT_OFFSET : ARMY_SEAL_OFFSET
+      },
+      verticalPosition: {
+        relative: VerticalPositionRelativeFrom.PAGE,
+        offset: isDha ? DHA_SEAL_TOP_OFFSET : ARMY_SEAL_OFFSET
+      },
+      allowOverlap: true,
+      behindDocument: isDha,
+      wrap: { type: TextWrappingType.NONE }
+    },
+    altText: {
+      title: "Authorized letterhead seal",
+      description: "Authorized organization letterhead seal",
+      name: "Authorized letterhead seal"
+    }
+  });
+}
+
 function createLetterhead(spec: MemoSpec): Paragraph[] {
   const image = spec.letterhead.sealImageDataUrl
     ? dataUrlToImage(spec.letterhead.sealImageDataUrl)
     : null;
-  const seal = image
-    ? new ImageRun({
-        type: image.type,
-        data: image.data,
-        transformation: { width: LETTERHEAD_SEAL_SIZE, height: LETTERHEAD_SEAL_SIZE },
-        floating: {
-          horizontalPosition: {
-            relative: HorizontalPositionRelativeFrom.PAGE,
-            offset: LETTERHEAD_SEAL_OFFSET
-          },
-          verticalPosition: {
-            relative: VerticalPositionRelativeFrom.PAGE,
-            offset: LETTERHEAD_SEAL_OFFSET
-          },
-          wrap: { type: TextWrappingType.NONE }
-        },
-        altText: {
-          title: "Authorized letterhead seal",
-          description: "Authorized organization letterhead seal",
-          name: "Authorized letterhead seal"
-        }
-      })
-    : null;
+  const style = spec.letterhead.letterheadStyle;
+  const seal = image ? createLetterheadSeal(image, style) : null;
 
   return spec.letterhead.orgLines.map((line, index) =>
     memoParagraph(
@@ -138,7 +157,8 @@ function createLetterhead(spec: MemoSpec): Paragraph[] {
           text: line,
           font: spec.font,
           size: LETTERHEAD_FONT_SIZE_PT * 2,
-          bold: true
+          bold: true,
+          color: style === "dha" ? DHA_LETTERHEAD_COLOR : undefined
         })
       ],
       {

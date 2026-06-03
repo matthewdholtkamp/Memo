@@ -1,6 +1,7 @@
 import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { buildDocx } from "../src/generator/buildDocx";
+import { builtInProfiles, profileToSnapshot } from "../src/model/profiles";
 import { createSyntheticSpec } from "./fixtures";
 
 const sealImageDataUrl =
@@ -15,7 +16,12 @@ async function docxXml(spec = createSyntheticSpec()) {
   const footerName = Object.keys(archive).find((path) => /^word\/footer\d+\.xml$/.test(path));
   return {
     document: text("word/document.xml"),
-    firstHeader: headers.find((header) => header.includes("DEPARTMENT OF THE ARMY")) ?? "",
+    firstHeader:
+      headers.find(
+        (header) =>
+          header.includes("SYNTHETIC TEST UNIT") ||
+          header.includes("GENERAL LEONARD WOOD COMMUNITY HOSPITAL")
+      ) ?? "",
     header: headers.find((header) => header.includes("SUBJECT:")) ?? "",
     footer: footerName ? text(footerName) : ""
   };
@@ -109,6 +115,41 @@ describe("buildDocx", () => {
         "ABCD-EF (25-50a)"
       )
     ).toBe(3);
+  });
+
+  it("renders the DHA and Army built-in headers with the shared hospital address", async () => {
+    const dhaProfile = builtInProfiles[0];
+    const armyProfile = builtInProfiles[1];
+    const dhaXml = await docxXml(
+      createSyntheticSpec({
+        profileId: dhaProfile.id,
+        letterhead: { ...profileToSnapshot(dhaProfile), sealImageDataUrl },
+        officeSymbol: dhaProfile.defaultOfficeSymbol
+      })
+    );
+    const armyXml = await docxXml(
+      createSyntheticSpec({
+        profileId: armyProfile.id,
+        letterhead: { ...profileToSnapshot(armyProfile), sealImageDataUrl },
+        officeSymbol: armyProfile.defaultOfficeSymbol
+      })
+    );
+
+    for (const xml of [dhaXml.firstHeader, armyXml.firstHeader]) {
+      expect(xml).toContain("GENERAL LEONARD WOOD COMMUNITY HOSPITAL");
+      expect(xml).toContain("4234 ILLINOIS AVE #351");
+      expect(xml).toContain("FORT LEONARD WOOD, MO 65473");
+    }
+    expect(dhaXml.firstHeader).toContain("DEFENSE HEALTH AGENCY");
+    expect(dhaXml.firstHeader).toContain('behindDoc="1"');
+    expect(dhaXml.firstHeader).toContain('<wp:extent cx="1200150" cy="1200150"/>');
+    expect(dhaXml.firstHeader).toContain('w:val="1F3864"');
+
+    expect(armyXml.firstHeader).toContain("DEPARTMENT OF THE ARMY");
+    expect(armyXml.firstHeader).toContain(
+      '<wp:positionH relativeFrom="page"><wp:posOffset>457200</wp:posOffset></wp:positionH>'
+    );
+    expect(armyXml.firstHeader).toContain('behindDoc="0"');
   });
 
   it("renders suspense dates in bold and post-closing lists", async () => {

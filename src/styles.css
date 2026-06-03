@@ -728,6 +728,14 @@ button.compliance-item:hover {
   grid-template-columns: 24px minmax(0, 1fr) 24px;
   margin-left: -12px;
   margin-right: -12px;
+  position: relative;
+}
+
+.preview-letterhead-row.dha {
+  display: block;
+  margin-left: 0;
+  margin-right: 0;
+  min-height: 31px;
 }
 
 .preview-seal-slot {
@@ -748,7 +756,25 @@ button.compliance-item:hover {
   flex-direction: column;
   font-size: 0.3rem;
   font-weight: 700;
+  position: relative;
   text-align: center;
+  z-index: 1;
+}
+
+.preview-letterhead.dha {
+  color: #1f3864;
+}
+
+.preview-watermark-seal {
+  display: block;
+  height: 32px;
+  left: 50%;
+  object-fit: contain;
+  position: absolute;
+  top: -5px;
+  transform: translateX(-50%);
+  width: 32px;
+  z-index: 0;
 }
 
 .preview-meta {
@@ -809,9 +835,21 @@ button.compliance-item:hover {
   margin-right: -27px;
 }
 
+.paper-preview.expanded .preview-letterhead-row.dha {
+  margin-left: 0;
+  margin-right: 0;
+  min-height: 70px;
+}
+
 .paper-preview.expanded .preview-seal-slot img {
   height: 47px;
   width: 47px;
+}
+
+.paper-preview.expanded .preview-watermark-seal {
+  height: 70px;
+  top: -9px;
+  width: 70px;
 }
 
 .paper-preview.expanded .preview-meta {

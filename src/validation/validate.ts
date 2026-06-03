@@ -113,8 +113,8 @@ export function validateMemo(spec: MemoSpec): ValidationResult {
 
   items.push(
     spec.letterhead.orgLines.some((line) => line.trim())
-      ? item("letterhead", "Letterhead profile", "pass", "A letterhead profile is selected.")
-      : item("letterhead", "Letterhead profile", "fail", "Select or import a profile.")
+      ? item("letterhead", "Letterhead", "pass", "A letterhead option is selected.")
+      : item("letterhead", "Letterhead", "fail", "Select DHA or Army.")
   );
   items.push(
     spec.arimsRecordNumber.trim()

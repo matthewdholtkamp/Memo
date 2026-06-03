@@ -19,14 +19,11 @@ import {
 import type { MemoSpec } from "./model/memoSpec";
 import {
   builtInProfiles,
-  createCustomProfile,
-  exportProfile,
-  importProfile,
   profileToSnapshot,
   refreshBuiltInProfileDefaults,
   type LetterheadProfile
 } from "./model/profiles";
-import { imageFileToDataUrl, materializeBundledSeal } from "./model/seals";
+import { materializeBundledSeal } from "./model/seals";
 import {
   fixSentenceSpacing,
   validateMemo,
@@ -278,20 +275,13 @@ export default function App() {
   const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([]);
   const [assistantUndoSpec, setAssistantUndoSpec] = useState<MemoSpec | null>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
-  const profileInputRef = useRef<HTMLInputElement>(null);
-  const sealInputRef = useRef<HTMLInputElement>(null);
 
-  const profiles = useMemo(
-    () => [...builtInProfiles, ...importedProfiles],
-    [importedProfiles]
-  );
+  const profiles = builtInProfiles;
   const currentSpec = useMemo(
     () => ({ ...spec, paragraphs: blocksToParagraphs(blocks) }),
     [blocks, spec]
   );
   const validation = useMemo(() => validateMemo(currentSpec), [currentSpec]);
-  const activeProfile = profiles.find((profile) => profile.id === spec.profileId);
-  const customProfile = importedProfiles.find((profile) => profile.id === spec.profileId);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -305,40 +295,12 @@ export default function App() {
     setSpec(refreshedSpec);
     setBlocks(flattenParagraphs(refreshedSpec.paragraphs));
   };
-  const updateCustomProfile = (update: Partial<LetterheadProfile>) => {
-    if (!customProfile) return;
-    const nextProfile = { ...customProfile, ...update };
-    setImportedProfiles((profilesList) =>
-      profilesList.map((profile) => (profile.id === nextProfile.id ? nextProfile : profile))
-    );
-    setSpec((current) => ({
-      ...current,
-      profileId: nextProfile.id,
-      letterhead: profileToSnapshot(nextProfile),
-      officeSymbol:
-        update.defaultOfficeSymbol === undefined
-          ? current.officeSymbol
-          : nextProfile.defaultOfficeSymbol,
-      font: nextProfile.defaultFont
-    }));
-  };
   const chooseProfile = (profileId: string) => {
     const profile = profiles.find((entry) => entry.id === profileId);
     if (!profile) return;
     setSpec((current) => ({
       ...current,
       profileId,
-      letterhead: profileToSnapshot(profile),
-      officeSymbol: profile.defaultOfficeSymbol,
-      font: profile.defaultFont
-    }));
-  };
-  const startCustomProfile = () => {
-    const profile = createCustomProfile();
-    setImportedProfiles((entries) => [...entries, profile]);
-    setSpec((current) => ({
-      ...current,
-      profileId: profile.id,
       letterhead: profileToSnapshot(profile),
       officeSymbol: profile.defaultOfficeSymbol,
       font: profile.defaultFont
@@ -399,40 +361,6 @@ export default function App() {
       setFeedback("Loaded the local draft JSON.");
     } catch {
       setFeedback("That draft file is not a valid ArmyMemo JSON export.");
-    }
-    event.target.value = "";
-  };
-  const handleProfileImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const profile = importProfile(await readTextFile(file));
-      setImportedProfiles((entries) => [...entries.filter(({ id }) => id !== profile.id), profile]);
-      chooseProfile(profile.id);
-      setSpec((current) => ({
-        ...current,
-        profileId: profile.id,
-        letterhead: profileToSnapshot(profile),
-        officeSymbol: profile.defaultOfficeSymbol,
-        font: profile.defaultFont
-      }));
-      setFeedback(`Imported profile: ${profile.displayName}.`);
-    } catch {
-      setFeedback("That profile file is not a valid ArmyMemo profile.");
-    }
-    event.target.value = "";
-  };
-  const handleSealUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      updateCustomProfile({
-        sealAssetPath: null,
-        sealImageDataUrl: await imageFileToDataUrl(file)
-      });
-      setFeedback("Attached the seal locally. It stays in this browser draft.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not attach the seal.");
     }
     event.target.value = "";
   };
@@ -526,7 +454,7 @@ export default function App() {
             ))}
           </fieldset>
           <label className="field-group">
-            <span className="field-label">Letterhead profile</span>
+            <span className="field-label">Letterhead</span>
             <select id="letterhead-profile" onChange={(event) => chooseProfile(event.target.value)} value={spec.profileId}>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
@@ -535,37 +463,6 @@ export default function App() {
               ))}
             </select>
           </label>
-          <div className="button-row compact">
-            <button className="text-button" onClick={startCustomProfile} type="button">New custom</button>
-            <button className="text-button" onClick={() => profileInputRef.current?.click()} type="button">Import profile</button>
-            <button
-              className="text-button"
-              disabled={!activeProfile}
-              onClick={() => activeProfile && downloadText(exportProfile(activeProfile), `${activeProfile.id}.profile.json`)}
-              type="button"
-            >
-              Export
-            </button>
-          </div>
-          {customProfile && (
-            <div className="custom-profile-box">
-              <label className="field-group">
-                <span className="field-label">Profile name</span>
-                <input value={customProfile.displayName} onChange={(event) => updateCustomProfile({ displayName: event.target.value })} />
-              </label>
-              <label className="field-group">
-                <span className="field-label">Organization lines</span>
-                <textarea
-                  rows={4}
-                  value={customProfile.orgLines.join("\n")}
-                  onChange={(event) => updateCustomProfile({ orgLines: event.target.value.split("\n") })}
-                />
-              </label>
-              <button className="secondary-button" onClick={() => sealInputRef.current?.click()} type="button">
-                Upload authorized seal
-              </button>
-            </div>
-          )}
           <label className="field-group">
             <span className="field-label">Office symbol</span>
             <input value={spec.officeSymbol} onChange={(event) => setSpec({ ...spec, officeSymbol: event.target.value })} />
@@ -722,8 +619,6 @@ export default function App() {
       </footer>
 
       <input accept="application/json" hidden onChange={handleDraftImport} ref={draftInputRef} type="file" />
-      <input accept="application/json" hidden onChange={handleProfileImport} ref={profileInputRef} type="file" />
-      <input accept="image/png,image/jpeg" hidden onChange={handleSealUpload} ref={sealInputRef} type="file" />
       {showGuide && <CacGuide onClose={() => setShowGuide(false)} />}
     </div>
   );

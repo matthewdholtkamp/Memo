@@ -97,8 +97,35 @@ describe("ArmyMemo editor", () => {
     expect(screen.getByAltText("Authorized letterhead seal")).toBeInTheDocument();
   });
 
+  it("keeps the letterhead selector limited to DHA and Army with DHA as the default", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const selector = screen.getByLabelText("Letterhead") as HTMLSelectElement;
+
+    expect(Array.from(selector.options, (option) => option.textContent)).toEqual([
+      "DHA",
+      "Army"
+    ]);
+    expect(selector).toHaveValue("glwch-dha");
+    expect(screen.getByText("DEFENSE HEALTH AGENCY")).toBeInTheDocument();
+    expect(screen.queryByText("Generic Army unit")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New custom" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import profile" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Upload seal")).not.toBeInTheDocument();
+
+    await user.selectOptions(selector, "glwch-army");
+
+    expect(selector).toHaveValue("glwch-army");
+    expect(screen.getByText("DEPARTMENT OF THE ARMY")).toBeInTheDocument();
+    expect(screen.getByAltText("Authorized letterhead seal")).toHaveAttribute(
+      "src",
+      expect.stringContaining("assets/seals/army-seal.png")
+    );
+  });
+
   it("refreshes a restored built-in letterhead snapshot", () => {
     const staleSpec = createDefaultSpec();
+    staleSpec.profileId = "glwach-dccs";
     staleSpec.letterhead = {
       ...staleSpec.letterhead,
       sealAssetPath: "assets/seals/placeholder.svg"
@@ -108,8 +135,9 @@ describe("ArmyMemo editor", () => {
     render(<App />);
     expect(screen.getByAltText("Authorized letterhead seal")).toHaveAttribute(
       "src",
-      expect.stringContaining("assets/seals/dod-seal.png")
+      expect.stringContaining("assets/seals/dha-seal.png")
     );
+    expect(screen.getByLabelText("Letterhead")).toHaveValue("glwch-dha");
     expect(screen.getByLabelText("Office symbol")).toHaveValue("MCXP-CCS");
   });
 

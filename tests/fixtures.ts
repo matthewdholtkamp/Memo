@@ -14,7 +14,8 @@ export function createSyntheticSpec(overrides: Partial<MemoSpec> = {}): MemoSpec
         "FORT EXAMPLE, MISSOURI 60000"
       ],
       sealAssetPath: null,
-      sealImageDataUrl: null
+      sealImageDataUrl: null,
+      letterheadStyle: "army"
     },
     officeSymbol: "ABCD-EF",
     arimsRecordNumber: "25-50a",

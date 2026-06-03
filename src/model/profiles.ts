@@ -2,8 +2,10 @@ import { z } from "zod";
 import {
   fontSchema,
   letterheadSnapshotSchema,
+  letterheadStyleSchema,
   signerPresetSchema,
   type LetterheadSnapshot,
+  type LetterheadStyle,
   type MemoFont,
   type MemoSpec,
   type SignerPreset
@@ -15,6 +17,7 @@ export const profileSchema = z.object({
   orgLines: z.array(z.string()).min(1),
   sealAssetPath: z.string().nullable(),
   sealImageDataUrl: z.string().nullable(),
+  letterheadStyle: letterheadStyleSchema.default("dha"),
   defaultOfficeSymbol: z.string(),
   defaultFont: fontSchema,
   signerPresets: z.array(signerPresetSchema)
@@ -26,39 +29,38 @@ export type LetterheadProfile = {
   orgLines: string[];
   sealAssetPath: string | null;
   sealImageDataUrl: string | null;
+  letterheadStyle: LetterheadStyle;
   defaultOfficeSymbol: string;
   defaultFont: MemoFont;
   signerPresets: SignerPreset[];
 };
 
+const GLWCH_ADDRESS_LINES = [
+  "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",
+  "4234 ILLINOIS AVE #351",
+  "FORT LEONARD WOOD, MO 65473"
+];
+
 export const builtInProfiles: LetterheadProfile[] = [
   {
-    id: "glwach-dccs",
-    displayName: "GLWCH / DCCS",
-    orgLines: [
-      "DEPARTMENT OF THE ARMY",
-      "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",
-      "4234 ILLINOIS AVE #351",
-      "FORT LEONARD WOOD, MO 65473"
-    ],
-    sealAssetPath: "assets/seals/dod-seal.png",
+    id: "glwch-dha",
+    displayName: "DHA",
+    orgLines: ["DEFENSE HEALTH AGENCY", ...GLWCH_ADDRESS_LINES],
+    sealAssetPath: "assets/seals/dha-seal.png",
     sealImageDataUrl: null,
+    letterheadStyle: "dha",
     defaultOfficeSymbol: "MCXP-CCS",
     defaultFont: "Arial",
     signerPresets: []
   },
   {
-    id: "generic-army",
-    displayName: "Generic Army unit",
-    orgLines: [
-      "DEPARTMENT OF THE ARMY",
-      "[UNIT OR ORGANIZATION]",
-      "[STREET ADDRESS]",
-      "[CITY, STATE ZIP]"
-    ],
-    sealAssetPath: "assets/seals/placeholder.svg",
+    id: "glwch-army",
+    displayName: "Army",
+    orgLines: ["DEPARTMENT OF THE ARMY", ...GLWCH_ADDRESS_LINES],
+    sealAssetPath: "assets/seals/army-seal.png",
     sealImageDataUrl: null,
-    defaultOfficeSymbol: "[OFFICE SYMBOL]",
+    letterheadStyle: "army",
+    defaultOfficeSymbol: "MCXP-CCS",
     defaultFont: "Arial",
     signerPresets: []
   }
@@ -69,18 +71,29 @@ export function profileToSnapshot(profile: LetterheadProfile): LetterheadSnapsho
     displayName: profile.displayName,
     orgLines: profile.orgLines,
     sealAssetPath: profile.sealAssetPath,
-    sealImageDataUrl: profile.sealImageDataUrl
+    sealImageDataUrl: profile.sealImageDataUrl,
+    letterheadStyle: profile.letterheadStyle
   });
 }
 
 export function refreshBuiltInProfileDefaults(spec: MemoSpec): MemoSpec {
-  const profile = builtInProfiles.find(({ id }) => id === spec.profileId);
-  if (!profile) return spec;
+  const profile =
+    builtInProfiles.find(({ id }) => id === spec.profileId) ?? builtInProfiles[0];
+  const officeSymbolNeedsDefault =
+    !spec.officeSymbol.trim() ||
+    spec.officeSymbol === "[OFFICE SYMBOL]" ||
+    (spec.profileId === "glwach-dccs" && spec.officeSymbol === "MCXP-DCCS");
   const officeSymbol =
-    spec.profileId === "glwach-dccs" && spec.officeSymbol === "MCXP-DCCS"
+    officeSymbolNeedsDefault
       ? profile.defaultOfficeSymbol
       : spec.officeSymbol;
-  return { ...spec, letterhead: profileToSnapshot(profile), officeSymbol };
+  return {
+    ...spec,
+    profileId: profile.id,
+    letterhead: profileToSnapshot(profile),
+    officeSymbol,
+    font: profile.defaultFont
+  };
 }
 
 export function exportProfile(profile: LetterheadProfile): string {
@@ -98,6 +111,7 @@ export function createCustomProfile(): LetterheadProfile {
     orgLines: ["DEPARTMENT OF THE ARMY", "[UNIT OR ORGANIZATION]", "[ADDRESS]"],
     sealAssetPath: null,
     sealImageDataUrl: null,
+    letterheadStyle: "dha",
     defaultOfficeSymbol: "",
     defaultFont: "Arial",
     signerPresets: []
