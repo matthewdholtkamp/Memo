@@ -49,34 +49,22 @@ function PaperPreview({
     0,
     expanded ? 8 : 4
   );
-  const isDhaLetterhead = spec.letterhead.letterheadStyle === "dha";
 
   return (
     <div
       aria-label={expanded ? "Expanded memorandum preview" : "Approximate memorandum structure"}
       className={`paper-preview ${expanded ? "expanded" : ""}`}
     >
-      <div className={`preview-letterhead-row ${isDhaLetterhead ? "dha" : "army"}`}>
-        {isDhaLetterhead && sealSource && (
-          <img
-            alt="Authorized letterhead seal"
-            className="preview-watermark-seal"
-            src={sealSource}
-          />
-        )}
-        {!isDhaLetterhead && (
-          <span className="preview-seal-slot">
-            {sealSource && <img alt="Authorized letterhead seal" src={sealSource} />}
-          </span>
-        )}
-        <div className={`preview-letterhead ${isDhaLetterhead ? "dha" : "army"}`}>
+      <div className="preview-letterhead-row">
+        <span className="preview-seal-slot">
+          {sealSource && <img alt="Authorized letterhead seal" src={sealSource} />}
+        </span>
+        <div className="preview-letterhead">
           {spec.letterhead.orgLines.map((line) => (
             <span key={line}>{line}</span>
           ))}
         </div>
-        {!isDhaLetterhead && (
-          <span aria-hidden="true" className="preview-letterhead-balance" />
-        )}
+        <span aria-hidden="true" className="preview-letterhead-balance" />
       </div>
       <div className="preview-meta">
         <span>

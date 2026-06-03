@@ -46,7 +46,7 @@ export const builtInProfiles: LetterheadProfile[] = [
     id: "glwch-dha",
     displayName: "DHA",
     orgLines: ["DEFENSE HEALTH AGENCY", ...GLWCH_ADDRESS_LINES],
-    sealAssetPath: "assets/seals/dha-seal.png",
+    sealAssetPath: "assets/seals/army-seal.png",
     sealImageDataUrl: null,
     letterheadStyle: "dha",
     defaultOfficeSymbol: "MCXP-CCS",

@@ -117,7 +117,7 @@ describe("buildDocx", () => {
     ).toBe(3);
   });
 
-  it("renders the DHA and Army built-in headers with the shared hospital address", async () => {
+  it("renders DHA and Army built-in headers with the same seal placement and shared address", async () => {
     const dhaProfile = builtInProfiles[0];
     const armyProfile = builtInProfiles[1];
     const dhaXml = await docxXml(
@@ -141,14 +141,18 @@ describe("buildDocx", () => {
       expect(xml).toContain("FORT LEONARD WOOD, MO 65473");
     }
     expect(dhaXml.firstHeader).toContain("DEFENSE HEALTH AGENCY");
-    expect(dhaXml.firstHeader).toContain('behindDoc="1"');
-    expect(dhaXml.firstHeader).toContain('<wp:extent cx="1200150" cy="1200150"/>');
-    expect(dhaXml.firstHeader).toContain('w:val="1F3864"');
+    expect(dhaXml.firstHeader).toContain(
+      '<wp:positionH relativeFrom="page"><wp:posOffset>457200</wp:posOffset></wp:positionH>'
+    );
+    expect(dhaXml.firstHeader).toContain('<wp:extent cx="914400" cy="914400"/>');
+    expect(dhaXml.firstHeader).toContain('behindDoc="0"');
+    expect(dhaXml.firstHeader).not.toContain('w:val="1F3864"');
 
     expect(armyXml.firstHeader).toContain("DEPARTMENT OF THE ARMY");
     expect(armyXml.firstHeader).toContain(
       '<wp:positionH relativeFrom="page"><wp:posOffset>457200</wp:posOffset></wp:positionH>'
     );
+    expect(armyXml.firstHeader).toContain('<wp:extent cx="914400" cy="914400"/>');
     expect(armyXml.firstHeader).toContain('behindDoc="0"');
   });
 

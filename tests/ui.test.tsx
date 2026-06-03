@@ -108,6 +108,10 @@ describe("ArmyMemo editor", () => {
     ]);
     expect(selector).toHaveValue("glwch-dha");
     expect(screen.getByText("DEFENSE HEALTH AGENCY")).toBeInTheDocument();
+    expect(screen.getByAltText("Authorized letterhead seal")).toHaveAttribute(
+      "src",
+      expect.stringContaining("assets/seals/army-seal.png")
+    );
     expect(screen.queryByText("Generic Army unit")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New custom" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import profile" })).not.toBeInTheDocument();
@@ -135,7 +139,7 @@ describe("ArmyMemo editor", () => {
     render(<App />);
     expect(screen.getByAltText("Authorized letterhead seal")).toHaveAttribute(
       "src",
-      expect.stringContaining("assets/seals/dha-seal.png")
+      expect.stringContaining("assets/seals/army-seal.png")
     );
     expect(screen.getByLabelText("Letterhead")).toHaveValue("glwch-dha");
     expect(screen.getByLabelText("Office symbol")).toHaveValue("MCXP-CCS");

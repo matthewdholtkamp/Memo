@@ -24,7 +24,7 @@ describe("profile helpers", () => {
     ]);
     expect(builtInProfiles[0]).toMatchObject({
       displayName: "DHA",
-      sealAssetPath: "assets/seals/dha-seal.png",
+      sealAssetPath: "assets/seals/army-seal.png",
       letterheadStyle: "dha",
       defaultOfficeSymbol: "MCXP-CCS",
       orgLines: ["DEFENSE HEALTH AGENCY", ...SHARED_HOSPITAL_ADDRESS]
