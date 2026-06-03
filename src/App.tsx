@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { downloadDocx } from "./generator/download";
+import type { AssistantMessage } from "./assistant/schema";
 import {
   blocksToParagraphs,
   flattenParagraphs,
@@ -43,6 +44,7 @@ import {
 } from "./ui/icons";
 import { MemoStageStrip } from "./ui/MemoStageStrip";
 import { StructuralPreview } from "./ui/StructuralPreview";
+import { AskDrHoltkampPanel } from "./ui/AskDrHoltkampPanel";
 
 const STAGE_TARGETS: Record<MemoStage, string> = {
   setup: "setup-stage",
@@ -272,6 +274,9 @@ export default function App() {
   const [showGuide, setShowGuide] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeStage, setActiveStage] = useState<MemoStage>("setup");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([]);
+  const [assistantUndoSpec, setAssistantUndoSpec] = useState<MemoSpec | null>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const sealInputRef = useRef<HTMLInputElement>(null);
@@ -344,6 +349,8 @@ export default function App() {
     loadSpec(createDefaultSpec());
     setImportedProfiles([]);
     setActiveStage("setup");
+    setAssistantMessages([]);
+    setAssistantUndoSpec(null);
     setFeedback("Started a new local memo.");
   };
   const navigateToStage = (stage: MemoStage, focusTarget = STAGE_TARGETS[stage]) => {
@@ -435,15 +442,38 @@ export default function App() {
     setSpacingProposal(null);
     setFeedback("Applied the sentence-spacing corrections to the editable draft.");
   };
+  const applyAssistantSpec = (nextSpec: MemoSpec, fields: string[]) => {
+    setAssistantUndoSpec(currentSpec);
+    loadSpec(nextSpec);
+    setFeedback(
+      fields.length
+        ? `Dr. Holtkamp updated ${fields.join(", ")}.`
+        : "Dr. Holtkamp updated the editable memo."
+    );
+  };
+  const undoAssistantChanges = () => {
+    if (!assistantUndoSpec) return;
+    loadSpec(assistantUndoSpec);
+    setAssistantUndoSpec(null);
+    setFeedback("Undid the most recent Dr. Holtkamp memo update.");
+  };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${assistantOpen ? "assistant-open" : ""}`}>
       <header className="app-header">
         <div>
           <span className="brand-mark">AM</span>
           <span className="brand-name">ArmyMemo</span>
         </div>
         <nav aria-label="Utility actions">
+          <button
+            aria-expanded={assistantOpen}
+            className={`header-button ask-header-button ${assistantOpen ? "active" : ""}`}
+            onClick={() => setAssistantOpen((open) => !open)}
+            type="button"
+          >
+            Ask Dr. Holtkamp
+          </button>
           <button className="header-button" onClick={resetDraft} type="button">
             New memo
           </button>
@@ -664,6 +694,17 @@ export default function App() {
           <StructuralPreview spec={currentSpec} />
         </aside>
       </main>
+      <AskDrHoltkampPanel
+        canUndo={Boolean(assistantUndoSpec)}
+        isOpen={assistantOpen}
+        messages={assistantMessages}
+        onApplySpec={applyAssistantSpec}
+        onClose={() => setAssistantOpen(false)}
+        onMessagesChange={setAssistantMessages}
+        onUndo={undoAssistantChanges}
+        spec={currentSpec}
+        validation={validation}
+      />
 
       <footer className="action-bar">
         <div className="button-row">

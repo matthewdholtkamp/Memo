@@ -1,12 +1,27 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../src/App";
 import { createDefaultSpec, formatMemoDate } from "../src/model/defaultSpec";
 import { DRAFT_STORAGE_KEY, saveActiveDraft } from "../src/model/drafts";
 
+function mockAssistantResponse(payload: unknown) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }]
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      )
+    )
+  );
+}
+
 describe("ArmyMemo editor", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     localStorage.clear();
   });
 
@@ -164,5 +179,87 @@ describe("ArmyMemo editor", () => {
     await waitFor(() => expect(localStorage.getItem(DRAFT_STORAGE_KEY)).not.toBeNull(), {
       timeout: 1000
     });
+  });
+
+  it("opens Ask Dr. Holtkamp, applies structured memo updates, and undoes them", async () => {
+    const user = userEvent.setup();
+    mockAssistantResponse({
+      assistantMessage: "I filled the memo draft from your rough request.",
+      action: "applyPatch",
+      memoPatch: {
+        subject: "Training Schedule Update",
+        addressees: ["All Section Leaders"],
+        paragraphs: [
+          {
+            text: "Purpose.  This memorandum announces the updated training schedule.",
+            children: []
+          }
+        ],
+        signature: {
+          name: "Jordan A. Rivera",
+          rankBranch: "LTC, MC",
+          title: ["Deputy Commander for Clinical Services"],
+          civilian: false
+        }
+      },
+      changedFields: [
+        { field: "subject" },
+        { field: "addressees" },
+        { field: "body paragraphs" },
+        { field: "signature block" }
+      ],
+      warnings: [],
+      questions: []
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    expect(screen.getByLabelText("Ask Dr. Holtkamp memo assistant")).toBeInTheDocument();
+    expect(document.querySelector(".modal-backdrop")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Message Dr. Holtkamp"), {
+      target: { value: "Write a memo for a training schedule update." }
+    });
+    await user.click(screen.getByRole("button", { name: "Send to Dr. Holtkamp" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Subject")).toHaveValue("Training Schedule Update"));
+    expect(screen.getByLabelText("Paragraph 1")).toHaveValue(
+      "Purpose.  This memorandum announces the updated training schedule."
+    );
+    expect(screen.getByText("I filled the memo draft from your rough request.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Undo AI changes" }));
+    expect(screen.getByLabelText("Subject")).toHaveValue("");
+    expect(screen.getByLabelText("Paragraph 1")).toHaveValue("");
+  });
+
+  it("keeps assistant chat while toggling the panel but does not persist it across remounts", async () => {
+    const user = userEvent.setup();
+    mockAssistantResponse({
+      assistantMessage: "I need the signer before changing the memo.",
+      action: "askClarifyingQuestion",
+      memoPatch: null,
+      changedFields: [],
+      warnings: [],
+      questions: ["Who signs this memorandum?"]
+    });
+
+    const { unmount } = render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    fireEvent.change(screen.getByLabelText("Message Dr. Holtkamp"), {
+      target: { value: "Draft a memo from scratch." }
+    });
+    await user.click(screen.getByRole("button", { name: "Send to Dr. Holtkamp" }));
+    await screen.findByText("I need the signer before changing the memo.");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    expect(screen.getByText("Draft a memo from scratch.")).toBeInTheDocument();
+
+    unmount();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    expect(screen.queryByText("Draft a memo from scratch.")).not.toBeInTheDocument();
+    expect(screen.getByText(/Give me rough text/)).toBeInTheDocument();
   });
 });
