@@ -167,27 +167,33 @@ export function AskDrHoltkampPanel({
       </p>
       <div className="ask-quick-actions" aria-label="Assistant shortcuts">
         <button
-          className="text-button"
+          aria-label="Paste old memo"
+          className="ask-shortcut-card"
           onClick={() => seedPrompt("Convert this pasted text into an Army memorandum draft:\n\n")}
           type="button"
         >
-          Paste old memo
+          <strong>Paste old memo</strong>
+          <span>Convert existing text</span>
         </button>
         <button
-          className="text-button"
+          aria-label="Write a memo"
+          className="ask-shortcut-card"
           onClick={() => seedPrompt("Write a memorandum for this request:\n\n")}
           type="button"
         >
-          Write a memo
+          <strong>Write a memo</strong>
+          <span>Start from instructions</span>
         </button>
         <button
-          className="text-button"
+          aria-label="Improve current memo"
+          className="ask-shortcut-card"
           onClick={() =>
             seedPrompt("Improve the current memo for clarity and AR 25-50 structure. Keep facts unchanged.")
           }
           type="button"
         >
-          Improve current memo
+          <strong>Improve current memo</strong>
+          <span>Revise what is open</span>
         </button>
       </div>
       <div className="ask-history" aria-live="polite">

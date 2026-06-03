@@ -467,12 +467,14 @@ export default function App() {
         </div>
         <nav aria-label="Utility actions">
           <button
+            aria-label="Ask Dr. Holtkamp memo assistant"
             aria-expanded={assistantOpen}
             className={`header-button ask-header-button ${assistantOpen ? "active" : ""}`}
             onClick={() => setAssistantOpen((open) => !open)}
             type="button"
           >
-            Ask Dr. Holtkamp
+            <span aria-hidden="true" className="ai-stars">✦✦✦</span>
+            <span>Ask Dr. Holtkamp</span>
           </button>
           <button className="header-button" onClick={resetDraft} type="button">
             New memo
@@ -708,7 +710,7 @@ export default function App() {
 
       <footer className="action-bar">
         <div className="button-row">
-          <button className="primary-button" disabled={!validation.canGenerate || isGenerating} onClick={handleGenerate} type="button">{isGenerating ? "Generating..." : "Generate .docx"}</button>
+          <button className="primary-button generate-button" disabled={!validation.canGenerate || isGenerating} onClick={handleGenerate} type="button">{isGenerating ? "Generating..." : "Generate .docx"}</button>
           <button className="secondary-button" onClick={() => downloadText(exportDraft(currentSpec, importedProfiles), "armymemo-draft.json")} type="button">Save draft JSON</button>
           <button className="secondary-button" onClick={() => draftInputRef.current?.click()} type="button">Load draft</button>
           <button className="secondary-button" onClick={() => { const example = createDefaultSpec(); example.arimsRecordNumber = "25-50a"; example.subject = "Clinic Workflow Update"; example.addressees = ["All Clinical Section Leaders"]; example.paragraphs = [{ text: "Purpose.  This memorandum establishes a simple clinic workflow update.", children: [] }, { text: "Section leaders will review the update with their teams.", children: [] }]; example.signature = { name: "Jordan A. Rivera", rankBranch: "LTC, MC", title: ["Deputy Commander for Clinical Services"], civilian: false }; loadSpec(example); }} type="button">Load example</button>

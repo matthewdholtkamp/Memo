@@ -158,16 +158,37 @@ h2 {
 }
 
 .ask-header-button {
-  border: 1px solid #c2d0ca;
+  background: linear-gradient(180deg, #f7fbf8 0%, #e8f3ed 100%);
+  border: 1px solid #8fb49f;
   border-radius: 999px;
-  padding-left: 0.82rem;
-  padding-right: 0.82rem;
+  box-shadow: 0 2px 8px rgb(35 66 50 / 10%);
+  color: #1f4a37;
+  gap: 7px;
+  padding-left: 0.9rem;
+  padding-right: 0.98rem;
+}
+
+.ask-header-button:hover {
+  background: linear-gradient(180deg, #fff 0%, #dfeee6 100%);
+  border-color: #5f9276;
+  text-decoration: none;
 }
 
 .ask-header-button.active {
-  background: #edf4f0;
-  border-color: #739482;
-  color: #17382a;
+  background: #244635;
+  border-color: #244635;
+  box-shadow: 0 3px 12px rgb(35 66 50 / 20%);
+  color: #fff;
+}
+
+.ai-stars {
+  color: #b88726;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.ask-header-button.active .ai-stars {
+  color: #f3cf72;
 }
 
 .stage-strip {
@@ -871,6 +892,29 @@ button.compliance-item:hover {
   background: #182f24;
 }
 
+.generate-button {
+  background: #173a2b;
+  border-color: #173a2b;
+  box-shadow: 0 7px 18px rgb(23 58 43 / 24%);
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  min-height: 42px;
+  padding: 0.72rem 1.05rem;
+}
+
+.generate-button:hover:not(:disabled) {
+  background: #0f2b1f;
+  box-shadow: 0 9px 22px rgb(23 58 43 / 30%);
+}
+
+.generate-button:disabled {
+  background: #7d8d86;
+  border-color: #7d8d86;
+  box-shadow: none;
+  color: #f3f6f4;
+  opacity: 0.72;
+}
+
 .secondary-button {
   background: #fff;
   border-color: #bfcac5;
@@ -961,6 +1005,52 @@ button.compliance-item:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.ask-quick-actions {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ask-shortcut-card {
+  background: #fff;
+  border: 1px solid #b9cfc4;
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgb(31 61 46 / 7%);
+  color: #264d3b;
+  min-height: 66px;
+  padding: 0.62rem 0.58rem;
+  text-align: left;
+}
+
+.ask-shortcut-card:hover {
+  background: #f1f8f4;
+  border-color: #6f9c82;
+  box-shadow: 0 5px 14px rgb(31 61 46 / 12%);
+}
+
+.ask-shortcut-card:focus-visible {
+  border-color: #326b4d;
+  box-shadow: 0 0 0 3px rgb(50 107 77 / 18%);
+  outline: none;
+}
+
+.ask-shortcut-card strong,
+.ask-shortcut-card span {
+  display: block;
+}
+
+.ask-shortcut-card strong {
+  font-size: 0.69rem;
+  line-height: 1.2;
+}
+
+.ask-shortcut-card span {
+  color: #6d7f77;
+  font-size: 0.61rem;
+  line-height: 1.25;
+  margin-top: 5px;
 }
 
 .ask-history {
@@ -1134,5 +1224,9 @@ button.compliance-item:hover {
     top: 0;
     width: 100%;
     z-index: 30;
+  }
+
+  .ask-quick-actions {
+    grid-template-columns: 1fr;
   }
 }

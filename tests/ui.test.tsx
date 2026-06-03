@@ -33,6 +33,13 @@ describe("ArmyMemo editor", () => {
     expect(screen.getByRole("button", { name: "Generate .docx" })).toBeEnabled();
   });
 
+  it("marks the AI pill with three stars while keeping a clear accessible label", () => {
+    render(<App />);
+    const askButton = screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" });
+    expect(askButton).toHaveTextContent("✦✦✦");
+    expect(askButton).toHaveTextContent("Ask Dr. Holtkamp");
+  });
+
   it("starts new memos with today's editable local date", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -213,8 +220,10 @@ describe("ArmyMemo editor", () => {
     });
 
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
-    expect(screen.getByLabelText("Ask Dr. Holtkamp memo assistant")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
+    expect(
+      screen.getByRole("complementary", { name: "Ask Dr. Holtkamp memo assistant" })
+    ).toBeInTheDocument();
     expect(document.querySelector(".modal-backdrop")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Message Dr. Holtkamp"), {
@@ -245,7 +254,7 @@ describe("ArmyMemo editor", () => {
     });
 
     const { unmount } = render(<App />);
-    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
     fireEvent.change(screen.getByLabelText("Message Dr. Holtkamp"), {
       target: { value: "Draft a memo from scratch." }
     });
@@ -253,13 +262,37 @@ describe("ArmyMemo editor", () => {
     await screen.findByText("I need the signer before changing the memo.");
 
     await user.click(screen.getByRole("button", { name: "Close" }));
-    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
     expect(screen.getByText("Draft a memo from scratch.")).toBeInTheDocument();
 
     unmount();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp" }));
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
     expect(screen.queryByText("Draft a memo from scratch.")).not.toBeInTheDocument();
     expect(screen.getByText(/Give me rough text/)).toBeInTheDocument();
+  });
+
+  it("makes assistant shortcut choices prominent while preserving their seed prompts", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
+
+    await user.click(screen.getByRole("button", { name: "Paste old memo" }));
+    expect(screen.getByLabelText("Message Dr. Holtkamp")).toHaveValue(
+      "Convert this pasted text into an Army memorandum draft:\n\n"
+    );
+    expect(screen.getByText("Convert existing text")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Write a memo" }));
+    expect(screen.getByLabelText("Message Dr. Holtkamp")).toHaveValue(
+      "Write a memorandum for this request:\n\n"
+    );
+    expect(screen.getByText("Start from instructions")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Improve current memo" }));
+    expect(screen.getByLabelText("Message Dr. Holtkamp")).toHaveValue(
+      "Improve the current memo for clarity and AR 25-50 structure. Keep facts unchanged."
+    );
+    expect(screen.getByText("Revise what is open")).toBeInTheDocument();
   });
 });
