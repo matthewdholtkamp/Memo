@@ -4,6 +4,7 @@ import {
   useState,
   type Dispatch,
   type FormEvent,
+  type KeyboardEvent,
   type SetStateAction
 } from "react";
 import { appliedFieldsFromResponse, applyAssistantPatch } from "../assistant/apply";
@@ -94,6 +95,14 @@ export function AskDrHoltkampPanel({
   const seedPrompt = (prompt: string) => {
     setInput(prompt);
     window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -215,6 +224,7 @@ export function AskDrHoltkampPanel({
           <textarea
             disabled={isSending}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={handleInputKeyDown}
             placeholder="Paste text or ask for the memo you need..."
             ref={inputRef}
             rows={5}

@@ -6,17 +6,19 @@ import { createDefaultSpec, formatMemoDate } from "../src/model/defaultSpec";
 import { DRAFT_STORAGE_KEY, saveActiveDraft } from "../src/model/drafts";
 
 function mockAssistantResponse(payload: unknown) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }]
-        }),
-        { headers: { "Content-Type": "application/json" } }
-      )
+  const fetchMock = vi.fn(async () =>
+    new Response(
+      JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }]
+      }),
+      { headers: { "Content-Type": "application/json" } }
     )
   );
+  vi.stubGlobal(
+    "fetch",
+    fetchMock
+  );
+  return fetchMock;
 }
 
 describe("ArmyMemo editor", () => {
@@ -272,6 +274,100 @@ describe("ArmyMemo editor", () => {
     await user.click(screen.getByRole("button", { name: "Undo AI changes" }));
     expect(screen.getByLabelText("Subject")).toHaveValue("");
     expect(screen.getByLabelText("Paragraph 1")).toHaveValue("");
+  });
+
+  it("sends the assistant prompt with Enter and applies memo fields on the first response", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockAssistantResponse({
+      assistantMessage: "I filled the memo draft from your pasted text.",
+      action: "applyPatch",
+      memoPatch: {
+        subject: "Enter Key Training Update",
+        paragraphs: [
+          {
+            text: "Purpose.  This memorandum confirms the Enter key workflow.",
+            children: []
+          }
+        ]
+      },
+      changedFields: [{ field: "subject" }, { field: "body paragraphs" }],
+      warnings: [],
+      questions: []
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
+    await user.type(
+      screen.getByLabelText("Message Dr. Holtkamp"),
+      "Convert this pasted memo text into a draft."
+    );
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Subject")).toHaveValue("Enter Key Training Update")
+    );
+    expect(screen.getByLabelText("Paragraph 1")).toHaveValue(
+      "Purpose.  This memorandum confirms the Enter key workflow."
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Shift+Enter as a newline without sending the assistant prompt", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockAssistantResponse({
+      assistantMessage: "This should not be sent.",
+      action: "noChange",
+      memoPatch: null,
+      changedFields: [],
+      warnings: [],
+      questions: []
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
+    const messageInput = screen.getByLabelText("Message Dr. Holtkamp");
+    await user.type(messageInput, "Line one");
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+
+    expect(messageInput).toHaveValue("Line one\n");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("recovers JSON-looking assistant chat into memo fields without showing raw code", async () => {
+    const user = userEvent.setup();
+    const nestedPatch = {
+      subject: "Recovered Old Memo",
+      paragraphs: [
+        {
+          text: "Purpose.  This memorandum was recovered from nested JSON.",
+          children: []
+        }
+      ]
+    };
+    mockAssistantResponse({
+      assistantMessage: `\`\`\`json\n${JSON.stringify(nestedPatch, null, 2)}\n\`\`\``,
+      action: "noChange",
+      memoPatch: null,
+      changedFields: [],
+      warnings: [],
+      questions: []
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
+    await user.type(screen.getByLabelText("Message Dr. Holtkamp"), "Convert this old memo.");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Subject")).toHaveValue("Recovered Old Memo")
+    );
+    expect(screen.getByLabelText("Paragraph 1")).toHaveValue(
+      "Purpose.  This memorandum was recovered from nested JSON."
+    );
+    expect(
+      screen.getByText("I updated the memo fields from the assistant response.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/```json/)).not.toBeInTheDocument();
   });
 
   it("keeps assistant chat while toggling the panel but does not persist it across remounts", async () => {

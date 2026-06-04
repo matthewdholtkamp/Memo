@@ -58,6 +58,86 @@ JSON response shape:
 
 Omit memoPatch keys that should not change. Use "askClarifyingQuestion" when you need user input before changing the memo.`;
 
+function paragraphResponseSchema(depth = 0): Record<string, unknown> {
+  const childItems =
+    depth >= 4
+      ? {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+            children: { type: "array", items: {} }
+          },
+          required: ["text", "children"]
+        }
+      : paragraphResponseSchema(depth + 1);
+
+  return {
+    type: "object",
+    properties: {
+      text: { type: "string" },
+      children: {
+        type: "array",
+        items: childItems
+      }
+    },
+    required: ["text", "children"]
+  };
+}
+
+const GEMINI_ASSISTANT_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    assistantMessage: { type: "string" },
+    action: {
+      type: "string",
+      enum: ["applyPatch", "askClarifyingQuestion", "noChange"]
+    },
+    memoPatch: {
+      type: "object",
+      nullable: true,
+      properties: {
+        type: { type: "string", enum: ["memo", "mfr", "counseling"] },
+        officeSymbol: { type: "string" },
+        arimsRecordNumber: { type: "string" },
+        date: { type: "string" },
+        suspense: { type: "string", nullable: true },
+        subject: { type: "string" },
+        addressees: { type: "array", items: { type: "string" } },
+        thru: { type: "array", items: { type: "string" } },
+        paragraphs: { type: "array", items: paragraphResponseSchema() },
+        authorityLine: { type: "string", nullable: true },
+        signature: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            rankBranch: { type: "string" },
+            title: { type: "array", items: { type: "string" } },
+            civilian: { type: "boolean" }
+          }
+        },
+        enclosures: { type: "array", items: { type: "string" } },
+        cfRecipients: { type: "array", items: { type: "string" } },
+        distribution: { type: "array", items: { type: "string" } },
+        acknowledgment: { type: "object", nullable: true }
+      }
+    },
+    changedFields: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          field: { type: "string" },
+          reason: { type: "string" }
+        },
+        required: ["field"]
+      }
+    },
+    warnings: { type: "array", items: { type: "string" } },
+    questions: { type: "array", items: { type: "string" } }
+  },
+  required: ["assistantMessage", "action", "changedFields", "warnings", "questions"]
+} as const;
+
 const geminiTextResponseSchema = {
   parse(data: unknown): string {
     if (!data || typeof data !== "object") return "";
@@ -86,6 +166,182 @@ function extractJson(text: string): unknown {
     }
     throw new Error("The assistant returned text instead of structured memo JSON.");
   }
+}
+
+function looksLikeJsonBlock(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    /^```(?:json)?/i.test(trimmed) ||
+    trimmed.startsWith("{") ||
+    /"memoPatch"|"assistantMessage"|"paragraphs"|"subject"/.test(trimmed)
+  );
+}
+
+function patchChangedFields(patch: unknown): Array<{ field: string }> {
+  if (!patch || typeof patch !== "object") return [];
+  return Object.keys(patch).map((field) => ({ field }));
+}
+
+type JsonRecord = Record<string, any>;
+type NormalizedAssistantResponse = {
+  assistantMessage: string;
+  action: "applyPatch" | "askClarifyingQuestion" | "noChange";
+  memoPatch: unknown;
+  changedFields: Array<{ field: string; reason?: string }>;
+  warnings: string[];
+  questions: string[];
+};
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : null;
+}
+
+function stringList(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string")
+    ? value
+    : null;
+}
+
+function sanitizeParagraph(value: unknown, depth = 0): JsonRecord | null {
+  const record = asRecord(value);
+  if (!record || typeof record.text !== "string" || !Array.isArray(record.children)) {
+    return null;
+  }
+  if (depth >= 5 && record.children.length > 0) return null;
+  const children = record.children.map((child) => sanitizeParagraph(child, depth + 1));
+  if (children.some((child) => !child)) return null;
+  return { text: record.text, children };
+}
+
+function sanitizePatch(value: unknown): JsonRecord | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const patch: JsonRecord = {};
+  const stringFields = [
+    "officeSymbol",
+    "arimsRecordNumber",
+    "date",
+    "subject"
+  ];
+  const listFields = [
+    "addressees",
+    "thru",
+    "enclosures",
+    "cfRecipients",
+    "distribution"
+  ];
+
+  if (
+    typeof record.type === "string" &&
+    ["memo", "mfr", "counseling"].includes(record.type)
+  ) {
+    patch.type = record.type;
+  }
+  for (const field of stringFields) {
+    if (typeof record[field] === "string") patch[field] = record[field];
+  }
+  for (const field of ["suspense", "authorityLine"]) {
+    if (record[field] === null || typeof record[field] === "string") {
+      patch[field] = record[field];
+    }
+  }
+  for (const field of listFields) {
+    const values = stringList(record[field]);
+    if (values) patch[field] = values;
+  }
+  if (Array.isArray(record.paragraphs)) {
+    const paragraphs = record.paragraphs.map((paragraph) => sanitizeParagraph(paragraph));
+    if (paragraphs.some((paragraph) => !paragraph)) return null;
+    patch.paragraphs = paragraphs;
+  }
+
+  const signature = asRecord(record.signature);
+  if (signature) {
+    const nextSignature: JsonRecord = {};
+    for (const field of ["name", "rankBranch"]) {
+      if (typeof signature[field] === "string") nextSignature[field] = signature[field];
+    }
+    const title = stringList(signature.title);
+    if (title) nextSignature.title = title;
+    if (typeof signature.civilian === "boolean") nextSignature.civilian = signature.civilian;
+    if (Object.keys(nextSignature).length > 0) patch.signature = nextSignature;
+  }
+  if (record.acknowledgment === null || asRecord(record.acknowledgment)) {
+    patch.acknowledgment = record.acknowledgment;
+  }
+
+  return Object.keys(patch).length > 0 ? patch : null;
+}
+
+function sanitizeChangedFields(value: unknown, fallbackPatch: unknown): Array<{ field: string; reason?: string }> {
+  if (!Array.isArray(value)) return patchChangedFields(fallbackPatch);
+  return value
+    .map((entry) => {
+      const record = asRecord(entry);
+      if (!record || typeof record.field !== "string") return null;
+      return typeof record.reason === "string"
+        ? { field: record.field, reason: record.reason }
+        : { field: record.field };
+    })
+    .filter(Boolean) as Array<{ field: string; reason?: string }>;
+}
+
+function sanitizeAssistantResponse(value: unknown): NormalizedAssistantResponse | null {
+  const record = asRecord(value);
+  if (
+    !record ||
+    typeof record.assistantMessage !== "string" ||
+    typeof record.action !== "string" ||
+    !["applyPatch", "askClarifyingQuestion", "noChange"].includes(record.action)
+  ) {
+    return null;
+  }
+
+  const memoPatch =
+    record.memoPatch === null || record.memoPatch === undefined
+      ? null
+      : sanitizePatch(record.memoPatch);
+  if (record.action === "applyPatch" && !memoPatch) return null;
+
+  const response = {
+    assistantMessage: record.assistantMessage,
+    action: record.action as NormalizedAssistantResponse["action"],
+    memoPatch,
+    changedFields: sanitizeChangedFields(record.changedFields, memoPatch),
+    warnings: stringList(record.warnings) ?? [],
+    questions: stringList(record.questions) ?? []
+  };
+  return response;
+}
+
+function normalizeAssistantResponse(response: any): any {
+  if (response.action === "applyPatch" && response.memoPatch) return response;
+  if (!looksLikeJsonBlock(response.assistantMessage)) return response;
+
+  let nestedJson: unknown;
+  try {
+    nestedJson = extractJson(response.assistantMessage);
+  } catch {
+    throw new Error("The assistant returned memo JSON in chat, but it was not valid enough to apply. Please send again.");
+  }
+
+  const nestedResponse = sanitizeAssistantResponse(nestedJson);
+  if (nestedResponse) return nestedResponse;
+
+  const nestedPatch = sanitizePatch(nestedJson);
+  if (nestedPatch) return {
+    assistantMessage: "I updated the memo fields from the assistant response.",
+    action: "applyPatch",
+    memoPatch: nestedPatch,
+    changedFields: patchChangedFields(nestedPatch),
+    warnings: response.warnings,
+    questions: response.questions
+  };
+
+  throw new Error("The assistant returned memo JSON in chat, but it did not match ArmyMemo fields. Please send again.");
 }
 
 function stripSealData(spec: MemoSpec): MemoSpec {
@@ -145,7 +401,8 @@ export async function callMemoAssistant({
       contents,
       generationConfig: {
         temperature: 0.35,
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_ASSISTANT_RESPONSE_SCHEMA
       }
     })
   });
@@ -159,5 +416,5 @@ export async function callMemoAssistant({
     throw new Error("The assistant returned an empty response.");
   }
 
-  return assistantResponseSchema.parse(extractJson(text));
+  return normalizeAssistantResponse(assistantResponseSchema.parse(extractJson(text))) as AssistantResponse;
 }
