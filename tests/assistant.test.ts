@@ -79,8 +79,7 @@ describe("ArmyMemo assistant", () => {
     expect(body.fallbackModel).toBe(ASSISTANT_FALLBACK_MODEL);
     expect(body.stream).toBe(false);
     expect(body.generationConfig.responseMimeType).toBe("application/json");
-    expect(body.generationConfig.responseSchema.properties.memoPatch.properties.subject.type).toBe("string");
-    expect(body.generationConfig.responseSchema.properties.action.enum).toContain("applyPatch");
+    expect(body.generationConfig).not.toHaveProperty("responseSchema");
     expect(JSON.stringify(body)).not.toContain("GEMINI_API_KEY");
     expect(JSON.stringify(body)).not.toContain("private-local-seal");
   });
@@ -127,6 +126,101 @@ describe("ArmyMemo assistant", () => {
       "subject",
       "body paragraphs"
     ]);
+  });
+
+  it("applies usable memo fields when an optional AI field is malformed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        geminiResponse(
+          JSON.stringify({
+            assistantMessage: "I converted the pasted counseling into ArmyMemo fields.",
+            action: "applyPatch",
+            memoPatch: {
+              type: "counseling",
+              subject: "Quarterly Developmental Counseling",
+              paragraphs: [
+                {
+                  text: "Purpose.  This memorandum documents quarterly developmental counseling.",
+                  children: []
+                }
+              ],
+              signature: {
+                name: "Alex Q. Example",
+                rankBranch: "LTC, MC",
+                title: ["Deputy Commander for Clinical Services"],
+                civilian: false
+              },
+              acknowledgment: "Sign after printing."
+            },
+            changedFields: [{ field: "paragraphs" }, { field: "subject" }],
+            warnings: ["Review the counseling acknowledgment before signature."],
+            questions: []
+          })
+        )
+      )
+    );
+
+    const response = await callMemoAssistant({
+      instruction: "Convert this pasted counseling.",
+      messages: [],
+      spec: createSyntheticSpec(),
+      validationItems: []
+    });
+
+    expect(response.action).toBe("applyPatch");
+    expect(response.memoPatch?.type).toBe("counseling");
+    expect(response.memoPatch?.subject).toBe("Quarterly Developmental Counseling");
+    expect(response.memoPatch?.paragraphs?.[0]?.text).toContain("quarterly developmental counseling");
+    expect(response.memoPatch?.acknowledgment).toBeUndefined();
+    expect(response.warnings).toEqual(["Review the counseling acknowledgment before signature."]);
+  });
+
+  it("normalizes shorthand AI paragraphs and partial acknowledgment objects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        geminiResponse(
+          JSON.stringify({
+            assistantMessage: "I converted the pasted text into memo fields.",
+            action: "applyPatch",
+            memoPatch: {
+              type: "counseling",
+              subject: "Counseling Update",
+              paragraphs: [
+                "Purpose.  This paragraph arrived as plain text.",
+                { text: "Discussion.  This paragraph omitted children." }
+              ],
+              acknowledgment: {
+                statement: "Acknowledge after review.",
+                signer: "Soldier"
+              }
+            },
+            changedFields: [{ field: "paragraphs" }, { field: "subject" }],
+            warnings: [],
+            questions: []
+          })
+        )
+      )
+    );
+
+    const response = await callMemoAssistant({
+      instruction: "Convert this pasted counseling.",
+      messages: [],
+      spec: createSyntheticSpec(),
+      validationItems: []
+    });
+
+    expect(response.action).toBe("applyPatch");
+    expect(response.memoPatch?.subject).toBe("Counseling Update");
+    expect(response.memoPatch?.paragraphs).toEqual([
+      { text: "Purpose.  This paragraph arrived as plain text.", children: [] },
+      { text: "Discussion.  This paragraph omitted children.", children: [] }
+    ]);
+    expect(response.memoPatch?.acknowledgment).toEqual({
+      statement: "Acknowledge after review.",
+      signers: []
+    });
   });
 
   it("recovers a raw memo patch nested inside assistantMessage", async () => {

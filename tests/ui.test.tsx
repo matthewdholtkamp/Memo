@@ -370,6 +370,51 @@ describe("ArmyMemo editor", () => {
     expect(screen.queryByText(/```json/)).not.toBeInTheDocument();
   });
 
+  it("applies visible memo fields when the assistant returns a malformed optional field", async () => {
+    const user = userEvent.setup();
+    mockAssistantResponse({
+      assistantMessage: "I converted the pasted counseling into ArmyMemo fields.",
+      action: "applyPatch",
+      memoPatch: {
+        type: "counseling",
+        subject: "Quarterly Developmental Counseling",
+        paragraphs: [
+          "Purpose.  This memorandum documents quarterly developmental counseling."
+        ],
+        signature: {
+          name: "Alex Q. Example",
+          rankBranch: "LTC, MC",
+          title: ["Deputy Commander for Clinical Services"],
+          civilian: false
+        },
+        acknowledgment: {
+          statement: "Sign after printing.",
+          signer: "Rated officer"
+        }
+      },
+      changedFields: [{ field: "paragraphs" }, { field: "subject" }],
+      warnings: [],
+      questions: []
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ask Dr. Holtkamp memo assistant" }));
+    fireEvent.change(screen.getByLabelText("Message Dr. Holtkamp"), {
+      target: { value: "Convert this pasted counseling into the memo." }
+    });
+    await user.click(screen.getByRole("button", { name: "Send to Dr. Holtkamp" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Subject")).toHaveValue("Quarterly Developmental Counseling")
+    );
+    expect(screen.getByLabelText("Paragraph 1")).toHaveValue(
+      "Purpose.  This memorandum documents quarterly developmental counseling."
+    );
+    expect(screen.getByLabelText("Name")).toHaveValue("Alex Q. Example");
+    expect(screen.getByText("I converted the pasted counseling into ArmyMemo fields.")).toBeInTheDocument();
+    expect(screen.queryByText(/I could not apply/)).not.toBeInTheDocument();
+  });
+
   it("keeps assistant chat while toggling the panel but does not persist it across remounts", async () => {
     const user = userEvent.setup();
     mockAssistantResponse({

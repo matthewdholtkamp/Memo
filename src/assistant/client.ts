@@ -27,6 +27,7 @@ ArmyMemo rules:
 - Keep subjects concise, ideally 10 words or fewer.
 - Body paragraph text must not include manual labels such as "1.", "a.", or "(1)" because ArmyMemo adds numbering automatically.
 - Use two spaces after sentence-ending periods and question marks in generated body text.
+- Counseling acknowledgment must be an object with statement and signers, null, or omitted. Never return acknowledgment as a plain string.
 - Leave unknown signer, addressee, routing, or authority details blank unless the user provides them. Ask concise follow-up questions when critical facts are missing.
 - Never include classified information, PHI, patient details, or private example memo content.
 
@@ -49,7 +50,7 @@ JSON response shape:
     "enclosures": ["string"],
     "cfRecipients": ["string"],
     "distribution": ["string"],
-    "acknowledgment": null
+    "acknowledgment": { "statement": "string", "signers": [{ "label": "string" }] }
   },
   "changedFields": [{ "field": "subject", "reason": "why changed" }],
   "warnings": ["short warning"],
@@ -57,86 +58,6 @@ JSON response shape:
 }
 
 Omit memoPatch keys that should not change. Use "askClarifyingQuestion" when you need user input before changing the memo.`;
-
-function paragraphResponseSchema(depth = 0): Record<string, unknown> {
-  const childItems =
-    depth >= 4
-      ? {
-          type: "object",
-          properties: {
-            text: { type: "string" },
-            children: { type: "array", items: {} }
-          },
-          required: ["text", "children"]
-        }
-      : paragraphResponseSchema(depth + 1);
-
-  return {
-    type: "object",
-    properties: {
-      text: { type: "string" },
-      children: {
-        type: "array",
-        items: childItems
-      }
-    },
-    required: ["text", "children"]
-  };
-}
-
-const GEMINI_ASSISTANT_RESPONSE_SCHEMA = {
-  type: "object",
-  properties: {
-    assistantMessage: { type: "string" },
-    action: {
-      type: "string",
-      enum: ["applyPatch", "askClarifyingQuestion", "noChange"]
-    },
-    memoPatch: {
-      type: "object",
-      nullable: true,
-      properties: {
-        type: { type: "string", enum: ["memo", "mfr", "counseling"] },
-        officeSymbol: { type: "string" },
-        arimsRecordNumber: { type: "string" },
-        date: { type: "string" },
-        suspense: { type: "string", nullable: true },
-        subject: { type: "string" },
-        addressees: { type: "array", items: { type: "string" } },
-        thru: { type: "array", items: { type: "string" } },
-        paragraphs: { type: "array", items: paragraphResponseSchema() },
-        authorityLine: { type: "string", nullable: true },
-        signature: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            rankBranch: { type: "string" },
-            title: { type: "array", items: { type: "string" } },
-            civilian: { type: "boolean" }
-          }
-        },
-        enclosures: { type: "array", items: { type: "string" } },
-        cfRecipients: { type: "array", items: { type: "string" } },
-        distribution: { type: "array", items: { type: "string" } },
-        acknowledgment: { type: "object", nullable: true }
-      }
-    },
-    changedFields: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          field: { type: "string" },
-          reason: { type: "string" }
-        },
-        required: ["field"]
-      }
-    },
-    warnings: { type: "array", items: { type: "string" } },
-    questions: { type: "array", items: { type: "string" } }
-  },
-  required: ["assistantMessage", "action", "changedFields", "warnings", "questions"]
-} as const;
 
 const geminiTextResponseSchema = {
   parse(data: unknown): string {
@@ -186,7 +107,7 @@ type JsonRecord = Record<string, any>;
 type NormalizedAssistantResponse = {
   assistantMessage: string;
   action: "applyPatch" | "askClarifyingQuestion" | "noChange";
-  memoPatch: unknown;
+  memoPatch: unknown | null;
   changedFields: Array<{ field: string; reason?: string }>;
   warnings: string[];
   questions: string[];
@@ -205,14 +126,38 @@ function stringList(value: unknown): string[] | null {
 }
 
 function sanitizeParagraph(value: unknown, depth = 0): JsonRecord | null {
+  if (typeof value === "string") {
+    return value.trim() ? { text: value.trim(), children: [] } : null;
+  }
   const record = asRecord(value);
-  if (!record || typeof record.text !== "string" || !Array.isArray(record.children)) {
+  if (!record || typeof record.text !== "string") {
     return null;
   }
-  if (depth >= 5 && record.children.length > 0) return null;
-  const children = record.children.map((child) => sanitizeParagraph(child, depth + 1));
+  const rawChildren = record.children === undefined ? [] : record.children;
+  if (!Array.isArray(rawChildren)) return null;
+  if (depth >= 5 && rawChildren.length > 0) return null;
+  const children = rawChildren.map((child) => sanitizeParagraph(child, depth + 1));
   if (children.some((child) => !child)) return null;
-  return { text: record.text, children };
+  return { text: record.text.trim(), children };
+}
+
+function sanitizeAcknowledgment(value: unknown): JsonRecord | null {
+  const record = asRecord(value);
+  if (!record || typeof record.statement !== "string") return null;
+  const signers = Array.isArray(record.signers)
+    ? record.signers
+        .map((signer) => {
+          const signerRecord = asRecord(signer);
+          return signerRecord && typeof signerRecord.label === "string"
+            ? { label: signerRecord.label.trim() }
+            : null;
+        })
+        .filter(Boolean)
+    : [];
+  return {
+    statement: record.statement.trim(),
+    signers
+  };
 }
 
 function sanitizePatch(value: unknown): JsonRecord | null {
@@ -264,13 +209,16 @@ function sanitizePatch(value: unknown): JsonRecord | null {
     for (const field of ["name", "rankBranch"]) {
       if (typeof signature[field] === "string") nextSignature[field] = signature[field];
     }
-    const title = stringList(signature.title);
-    if (title) nextSignature.title = title;
+    const title = stringList(signature.title)?.map((line) => line.trim()).filter(Boolean);
+    if (title && title.length > 0) nextSignature.title = title;
     if (typeof signature.civilian === "boolean") nextSignature.civilian = signature.civilian;
     if (Object.keys(nextSignature).length > 0) patch.signature = nextSignature;
   }
-  if (record.acknowledgment === null || asRecord(record.acknowledgment)) {
-    patch.acknowledgment = record.acknowledgment;
+  if (record.acknowledgment === null) {
+    patch.acknowledgment = null;
+  } else {
+    const acknowledgment = sanitizeAcknowledgment(record.acknowledgment);
+    if (acknowledgment) patch.acknowledgment = acknowledgment;
   }
 
   return Object.keys(patch).length > 0 ? patch : null;
@@ -317,13 +265,26 @@ function sanitizeAssistantResponse(value: unknown): NormalizedAssistantResponse 
   return response;
 }
 
-function normalizeAssistantResponse(response: any): any {
-  if (response.action === "applyPatch" && response.memoPatch) return response;
-  if (!looksLikeJsonBlock(response.assistantMessage)) return response;
+function normalizeAssistantResponse(value: unknown): unknown {
+  const record = asRecord(value);
+  if (!record) return value;
+
+  const directResponse = sanitizeAssistantResponse(value);
+  if (directResponse?.action === "applyPatch" && directResponse.memoPatch) {
+    return directResponse;
+  }
+
+  if (typeof record.assistantMessage !== "string") return value;
+  if (!looksLikeJsonBlock(record.assistantMessage)) {
+    if (record.action === "applyPatch") {
+      throw new Error("The assistant said it updated the memo, but did not return usable memo fields. Please send again.");
+    }
+    return directResponse ?? value;
+  }
 
   let nestedJson: unknown;
   try {
-    nestedJson = extractJson(response.assistantMessage);
+    nestedJson = extractJson(record.assistantMessage);
   } catch {
     throw new Error("The assistant returned memo JSON in chat, but it was not valid enough to apply. Please send again.");
   }
@@ -337,8 +298,8 @@ function normalizeAssistantResponse(response: any): any {
     action: "applyPatch",
     memoPatch: nestedPatch,
     changedFields: patchChangedFields(nestedPatch),
-    warnings: response.warnings,
-    questions: response.questions
+    warnings: stringList(record.warnings) ?? [],
+    questions: stringList(record.questions) ?? []
   };
 
   throw new Error("The assistant returned memo JSON in chat, but it did not match ArmyMemo fields. Please send again.");
@@ -401,8 +362,7 @@ export async function callMemoAssistant({
       contents,
       generationConfig: {
         temperature: 0.35,
-        responseMimeType: "application/json",
-        responseSchema: GEMINI_ASSISTANT_RESPONSE_SCHEMA
+        responseMimeType: "application/json"
       }
     })
   });
@@ -416,5 +376,5 @@ export async function callMemoAssistant({
     throw new Error("The assistant returned an empty response.");
   }
 
-  return normalizeAssistantResponse(assistantResponseSchema.parse(extractJson(text))) as AssistantResponse;
+  return assistantResponseSchema.parse(normalizeAssistantResponse(extractJson(text)));
 }
