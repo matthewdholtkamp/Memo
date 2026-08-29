@@ -361,7 +361,7 @@ export async function callMemoAssistant({
       systemInstruction: { role: "system", parts: [{ text: ARMYMEMO_ASSISTANT_PROMPT }] },
       contents,
       generationConfig: {
-        temperature: 0.35,
+        thinkingConfig: { thinkingLevel: "low" },
         responseMimeType: "application/json"
       }
     })

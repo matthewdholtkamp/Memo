@@ -7,8 +7,8 @@ import {
 } from "../model/memoSpec";
 
 export const ASSISTANT_WORKER_URL = "https://bandaid6.mholtkamp.workers.dev";
-export const ASSISTANT_MODEL = "gemini-3.1-flash-lite";
-export const ASSISTANT_FALLBACK_MODEL = "gemini-2.5-flash";
+export const ASSISTANT_MODEL = "gemini-3.5-flash-lite";
+export const ASSISTANT_FALLBACK_MODEL = "gemini-3.7-flash";
 
 export const assistantPatchSchema = z
   .object({
