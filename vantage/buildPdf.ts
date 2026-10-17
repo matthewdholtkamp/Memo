@@ -32,7 +32,6 @@ const SEAL_X = 36; // seal: 1 inch, 1/2 inch from the left and top edges
 const SEAL_TOP = 36;
 const SEAL_SIZE = 72;
 const OFFICE_TOP_LETTERHEAD = SEAL_TOP + SEAL_SIZE + 2 * LH; // office symbol: second line below the seal
-const NAVY = rgb(0, 0, 0.5);
 const BLACK = rgb(0, 0, 0);
 // Subparagraph first-line indent by level: 1. at the margin, a. 1/4 in, (1) 1/2 in, (a) 1/2 in
 // ("Do not indent any further than the second subdivision" - fig 2-1).
@@ -400,7 +399,8 @@ export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
       pages[0].drawImage(image, { x: SEAL_X, y: PAGE_H - SEAL_TOP - SEAL_SIZE, width: SEAL_SIZE, height: SEAL_SIZE });
     }
     // Army (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black.
-    // DHA (DHA letterhead): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, navy.
+    // DHA (DHA letterhead layout): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt.
+    // Black ink for both (AR 25-50, paras 1-16b(3) and 1-20).
     const lines = trimmedList(spec.letterhead.orgLines);
     let baseline = dhaStyle ? 51 : 59;
     lines.forEach((line, i) => {
@@ -408,7 +408,7 @@ export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
       const font = i === 0 ? fonts.lhBold : fonts.lhRegular;
       const value = clean(line);
       const w = font.widthOfTextAtSize(value, size);
-      pages[0].drawText(value, { x: (PAGE_W - w) / 2, y: PAGE_H - baseline, size, font, color: dhaStyle ? NAVY : BLACK });
+      pages[0].drawText(value, { x: (PAGE_W - w) / 2, y: PAGE_H - baseline, size, font, color: BLACK });
       baseline += dhaStyle ? 13.5 : i === 0 ? 9.1 : 9.2;
     });
   }

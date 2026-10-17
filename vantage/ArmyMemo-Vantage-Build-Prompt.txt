@@ -91,7 +91,7 @@ d) On load: if parameter memoId is set, load that ArmyMemoDraft and parse specJs
 e) Privacy bar text: "Drafts save to Vantage under your account permissions." Keep the "Clear saved draft" button (clears the local autosave only).
 f) "New memo" also clears memoId (emit memoSaved with "").
 g) CAC signing guide steps become: 1. Generate and review the unsigned PDF. 2. Complete the official date after signature coordination. 3. Open the PDF in Adobe Acrobat. 4. Place the CAC-secured digital signature field above the typed signature block. 5. Follow your organization's records-management and release procedures. Notice box text stays: "ArmyMemo prepares an unsigned formatting aid. It does not apply, validate, or replace a CAC-secured signature."
-h) Structural preview helper text: "Final spacing and pagination are set in the generated PDF." Expanded preview subtitle: "PDF layout approximation". Make the preview follow the same AR 25-50 rules as the PDF: no letterhead or seal for type "mfr"; no paragraph number when there is only one top-level paragraph; "SUBJECT: " with one space; for multiple addressees show "MEMORANDUM FOR" on its own line with each address below it.
+h) Structural preview helper text: "Final spacing and pagination are set in the generated PDF." Expanded preview subtitle: "PDF layout approximation". The StructuralPreview in Appendix L already follows the same AR 25-50 rules as the PDF (no letterhead for MFR, one-paragraph memos unnumbered, multiple-address and THRU layout); keep it as is.
 i) The Ask Dr. Holtkamp drawer, header button (gold pill with ✦✦✦), message cards, chips, warnings, questions, undo — identical. It calls askArmyMemoAssistant through OSDK.
 
 3.6 Seal: the letterhead seal is army-seal.png (163 x 163 px). I will upload it into the ArmyMemo folder (or give it to you in context). Place it in the repo at src/assets/army-seal.png and import it inline (Vite: import sealDataUrl from "./assets/army-seal.png?inline"). In profiles.ts, set sealImageDataUrl for both built-in profiles to that data URL so buildPdf and the preview always have it; never fetch it at runtime. If you cannot get the PNG into the repo, ship without it and add a small "Upload seal" button in Memo setup (PNG/JPEG, 2 MB max, stored in the draft spec as a data URL, same rules as Appendix seals logic below) and tell me.
@@ -99,7 +99,7 @@ i) The Ask Dr. Holtkamp drawer, header button (gold pill with ✦✦✦), messag
 
 3.7 PDF rules — AR 25-50 (10 October 2020, administrative revision 4 October 2024), already implemented and tested in Appendix G. Do not "improve" or change them:
 - Letter size; 1 in left, right and bottom margins; ragged right; Arial 12 -> Helvetica, Times New Roman 12 -> Times-Roman (metric-identical PDF standard fonts); single-spaced lines of 13.8 pt; one blank line between paragraphs and subparagraphs.
-- Letterhead (page 1 only): 1 in seal at 0.5 in from the top and left edges. Army style (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black, centered. DHA style (DHA letterhead): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, navy, centered. Style comes from letterhead.letterheadStyle.
+- Letterhead (page 1 only): 1 in seal at 0.5 in from the top and left edges. Army style (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black, centered. DHA style (DHA letterhead layout): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, black, centered. Black ink for all letterhead (paras 1-16b(3), 1-20). Style comes from letterhead.letterheadStyle.
 - Office symbol on the second line below the seal, with the ARIMS number one space after it in parentheses; date flush right on the same line. Suspense "S: date" bold, flush right, two lines above the date line.
 - MEMORANDUM FOR on the third line below the office symbol. One address: same line, runover flush left. Two to five addresses: "MEMORANDUM FOR" alone, blank line, each address on its own line with runover indented 1/4 in. More than five or a distribution list: "MEMORANDUM FOR SEE DISTRIBUTION". One THRU: "MEMORANDUM THRU address", blank line, "FOR address". Two or more THRU: "MEMORANDUM THRU" alone, blank line, the THRU addresses, blank line, "FOR ...". MFR and counseling: "MEMORANDUM FOR RECORD" (THRU ignored).
 - "SUBJECT: " with ONE space after the colon (para 1-39b(9)), second line below the last address line, runover flush left. Text begins on the third line below the subject.
@@ -822,7 +822,6 @@ const SEAL_X = 36; // seal: 1 inch, 1/2 inch from the left and top edges
 const SEAL_TOP = 36;
 const SEAL_SIZE = 72;
 const OFFICE_TOP_LETTERHEAD = SEAL_TOP + SEAL_SIZE + 2 * LH; // office symbol: second line below the seal
-const NAVY = rgb(0, 0, 0.5);
 const BLACK = rgb(0, 0, 0);
 // Subparagraph first-line indent by level: 1. at the margin, a. 1/4 in, (1) 1/2 in, (a) 1/2 in
 // ("Do not indent any further than the second subdivision" - fig 2-1).
@@ -1190,7 +1189,8 @@ export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
       pages[0].drawImage(image, { x: SEAL_X, y: PAGE_H - SEAL_TOP - SEAL_SIZE, width: SEAL_SIZE, height: SEAL_SIZE });
     }
     // Army (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black.
-    // DHA (DHA letterhead): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, navy.
+    // DHA (DHA letterhead layout): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt.
+    // Black ink for both (AR 25-50, paras 1-16b(3) and 1-20).
     const lines = trimmedList(spec.letterhead.orgLines);
     let baseline = dhaStyle ? 51 : 59;
     lines.forEach((line, i) => {
@@ -1198,7 +1198,7 @@ export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
       const font = i === 0 ? fonts.lhBold : fonts.lhRegular;
       const value = clean(line);
       const w = font.widthOfTextAtSize(value, size);
-      pages[0].drawText(value, { x: (PAGE_W - w) / 2, y: PAGE_H - baseline, size, font, color: dhaStyle ? NAVY : BLACK });
+      pages[0].drawText(value, { x: (PAGE_W - w) / 2, y: PAGE_H - baseline, size, font, color: BLACK });
       baseline += dhaStyle ? 13.5 : i === 0 ? 9.1 : 9.2;
     });
   }
@@ -1980,15 +1980,17 @@ function displayLines(values: string[]): string[] {
 
 function flattenPreviewParagraphs(
   paragraphs: ParagraphNode[],
-  depth = 0
+  depth = 0,
+  single = paragraphs.length === 1
 ): Array<{ depth: number; label: string; text: string }> {
   return paragraphs.flatMap((paragraph, index) => [
     {
       depth,
-      label: paragraphLabel(depth, index + 1),
+      // A one-paragraph memorandum is not numbered (AR 25-50 fig 2-13).
+      label: single && depth === 0 ? "" : paragraphLabel(depth, index + 1),
       text: paragraph.text
     },
-    ...flattenPreviewParagraphs(paragraph.children, depth + 1)
+    ...flattenPreviewParagraphs(paragraph.children, depth + 1, false)
   ]);
 }
 
@@ -2006,12 +2008,19 @@ function PaperPreview({
   const useDistribution =
     displayLines(spec.distribution).length > 0 ||
     displayLines(spec.addressees).length > 5;
-  const address =
-    spec.type === "memo"
-      ? useDistribution
-        ? "MEMORANDUM FOR SEE DISTRIBUTION"
-        : `MEMORANDUM FOR ${displayLines(spec.addressees)[0] ?? ""}`
-      : "MEMORANDUM FOR RECORD";
+  const addressees = displayLines(spec.addressees);
+  const thru = spec.type === "memo" ? displayLines(spec.thru) : [];
+  const forTarget = useDistribution ? ["SEE DISTRIBUTION"] : addressees;
+  const lead = thru.length ? "FOR" : "MEMORANDUM FOR";
+  const addressLines =
+    spec.type !== "memo"
+      ? ["MEMORANDUM FOR RECORD"]
+      : [
+          ...(thru.length === 1 ? [`MEMORANDUM THRU ${thru[0]}`] : thru.length > 1 ? ["MEMORANDUM THRU", ...thru] : []),
+          ...(forTarget.length <= 1 ? [`${lead} ${forTarget[0] ?? ""}`.trimEnd()] : [lead, ...forTarget])
+        ];
+  // A memorandum for record is typed on plain paper (AR 25-50 fig 2-17).
+  const showLetterhead = spec.type !== "mfr";
   const previewParagraphs = flattenPreviewParagraphs(spec.paragraphs).slice(
     0,
     expanded ? 8 : 4
@@ -2022,7 +2031,7 @@ function PaperPreview({
       aria-label={expanded ? "Expanded memorandum preview" : "Approximate memorandum structure"}
       className={`paper-preview ${expanded ? "expanded" : ""}`}
     >
-      <div className="preview-letterhead-row">
+      {showLetterhead && <div className="preview-letterhead-row">
         <span className="preview-seal-slot">
           {sealSource && <img alt="Authorized letterhead seal" src={sealSource} />}
         </span>
@@ -2032,7 +2041,7 @@ function PaperPreview({
           ))}
         </div>
         <span aria-hidden="true" className="preview-letterhead-balance" />
-      </div>
+      </div>}
       <div className="preview-meta">
         <span>
           {spec.officeSymbol || "[OFFICE SYMBOL]"}{" "}
@@ -2040,15 +2049,19 @@ function PaperPreview({
         </span>
         <span>{spec.date || "[DATE]"}</span>
       </div>
-      <p className="preview-address">{address}</p>
+      <div className="preview-address">
+        {addressLines.map((line, index) => (
+          <p key={`${line}-${index}`}>{line}</p>
+        ))}
+      </div>
       <p className="preview-subject">SUBJECT: {spec.subject || "[SUBJECT]"}</p>
       <div className="preview-body">
         {previewParagraphs.map((paragraph, index) => (
           <p
             key={`${paragraph.depth}-${paragraph.text}-${index}`}
-            style={{ marginLeft: `${paragraph.depth * (expanded ? 16 : 6)}px` }}
+            style={{ marginLeft: `${Math.min(paragraph.depth, 2) * (expanded ? 16 : 6)}px` }}
           >
-            {paragraph.label} {paragraph.text || "[Paragraph text]"}
+            {paragraph.label ? `${paragraph.label} ` : ""}{paragraph.text || "[Paragraph text]"}
           </p>
         ))}
       </div>
