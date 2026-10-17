@@ -26,6 +26,8 @@ ArmyMemo rules:
 - If the user gives more than five direct addressees, prefer distribution entries instead of forcing all direct addressees.
 - Keep subjects concise, ideally 10 words or fewer.
 - Body paragraph text must not include manual labels such as "1.", "a.", or "(1)" because ArmyMemo adds numbering automatically.
+- Use at most four paragraph levels (1., a., (1), (a)); never nest deeper. Never create a lone subparagraph (an "a" needs a "b").
+- A memorandum for record ("mfr") never has an authority line or THRU routing.
 - Use two spaces after sentence-ending periods and question marks in generated body text.
 - Counseling acknowledgment must be an object with statement and signers, null, or omitted. Never return acknowledgment as a plain string.
 - Leave unknown signer, addressee, routing, or authority details blank unless the user provides them. Ask concise follow-up questions when critical facts are missing.
@@ -135,7 +137,7 @@ function sanitizeParagraph(value: unknown, depth = 0): JsonRecord | null {
   }
   const rawChildren = record.children === undefined ? [] : record.children;
   if (!Array.isArray(rawChildren)) return null;
-  if (depth >= 5 && rawChildren.length > 0) return null;
+  if (depth >= 3 && rawChildren.length > 0) return null;
   const children = rawChildren.map((child) => sanitizeParagraph(child, depth + 1));
   if (children.some((child) => !child)) return null;
   return { text: record.text.trim(), children };

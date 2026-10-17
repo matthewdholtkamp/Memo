@@ -13,15 +13,17 @@ function displayLines(values: string[]): string[] {
 
 function flattenPreviewParagraphs(
   paragraphs: ParagraphNode[],
-  depth = 0
+  depth = 0,
+  single = paragraphs.length === 1
 ): Array<{ depth: number; label: string; text: string }> {
   return paragraphs.flatMap((paragraph, index) => [
     {
       depth,
-      label: paragraphLabel(depth, index + 1),
+      // A one-paragraph memorandum is not numbered (AR 25-50 fig 2-13).
+      label: single && depth === 0 ? "" : paragraphLabel(depth, index + 1),
       text: paragraph.text
     },
-    ...flattenPreviewParagraphs(paragraph.children, depth + 1)
+    ...flattenPreviewParagraphs(paragraph.children, depth + 1, false)
   ]);
 }
 
@@ -39,12 +41,19 @@ function PaperPreview({
   const useDistribution =
     displayLines(spec.distribution).length > 0 ||
     displayLines(spec.addressees).length > 5;
-  const address =
-    spec.type === "memo"
-      ? useDistribution
-        ? "MEMORANDUM FOR SEE DISTRIBUTION"
-        : `MEMORANDUM FOR ${displayLines(spec.addressees)[0] ?? ""}`
-      : "MEMORANDUM FOR RECORD";
+  const addressees = displayLines(spec.addressees);
+  const thru = spec.type === "memo" ? displayLines(spec.thru) : [];
+  const forTarget = useDistribution ? ["SEE DISTRIBUTION"] : addressees;
+  const lead = thru.length ? "FOR" : "MEMORANDUM FOR";
+  const addressLines =
+    spec.type !== "memo"
+      ? ["MEMORANDUM FOR RECORD"]
+      : [
+          ...(thru.length === 1 ? [`MEMORANDUM THRU ${thru[0]}`] : thru.length > 1 ? ["MEMORANDUM THRU", ...thru] : []),
+          ...(forTarget.length <= 1 ? [`${lead} ${forTarget[0] ?? ""}`.trimEnd()] : [lead, ...forTarget])
+        ];
+  // A memorandum for record is typed on plain paper (AR 25-50 fig 2-17).
+  const showLetterhead = spec.type !== "mfr";
   const previewParagraphs = flattenPreviewParagraphs(spec.paragraphs).slice(
     0,
     expanded ? 8 : 4
@@ -55,7 +64,7 @@ function PaperPreview({
       aria-label={expanded ? "Expanded memorandum preview" : "Approximate memorandum structure"}
       className={`paper-preview ${expanded ? "expanded" : ""}`}
     >
-      <div className="preview-letterhead-row">
+      {showLetterhead && <div className="preview-letterhead-row">
         <span className="preview-seal-slot">
           {sealSource && <img alt="Authorized letterhead seal" src={sealSource} />}
         </span>
@@ -65,7 +74,7 @@ function PaperPreview({
           ))}
         </div>
         <span aria-hidden="true" className="preview-letterhead-balance" />
-      </div>
+      </div>}
       <div className="preview-meta">
         <span>
           {spec.officeSymbol || "[OFFICE SYMBOL]"}{" "}
@@ -73,15 +82,19 @@ function PaperPreview({
         </span>
         <span>{spec.date || "[DATE]"}</span>
       </div>
-      <p className="preview-address">{address}</p>
+      <div className="preview-address">
+        {addressLines.map((line, index) => (
+          <p key={`${line}-${index}`}>{line}</p>
+        ))}
+      </div>
       <p className="preview-subject">SUBJECT: {spec.subject || "[SUBJECT]"}</p>
       <div className="preview-body">
         {previewParagraphs.map((paragraph, index) => (
           <p
             key={`${paragraph.depth}-${paragraph.text}-${index}`}
-            style={{ marginLeft: `${paragraph.depth * (expanded ? 16 : 6)}px` }}
+            style={{ marginLeft: `${Math.min(paragraph.depth, 2) * (expanded ? 16 : 6)}px` }}
           >
-            {paragraph.label} {paragraph.text || "[Paragraph text]"}
+            {paragraph.label ? `${paragraph.label} ` : ""}{paragraph.text || "[Paragraph text]"}
           </p>
         ))}
       </div>
