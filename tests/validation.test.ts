@@ -39,4 +39,26 @@ describe("validateMemo", () => {
     expect(fixed.paragraphs[0].text).toBe("Purpose.  This needs correction?  Yes.");
     expect(spec.paragraphs[0].text).toBe("Purpose. This needs correction? Yes.");
   });
+
+  it("allows four numbering levels and blocks a fifth (AR 25-50 fig 2-1)", () => {
+    const leaf = (text: string) => ({ text, children: [] });
+    const four = createSyntheticSpec({
+      paragraphs: [
+        { text: "One", children: [{ text: "a", children: [{ text: "(1)", children: [leaf("(a)"), leaf("(b)")] }, leaf("(2)")] }, leaf("b")] },
+        leaf("Two")
+      ]
+    });
+    expect(validateMemo(four).canGenerate).toBe(true);
+    const five = createSyntheticSpec({
+      paragraphs: [
+        { text: "One", children: [{ text: "a", children: [{ text: "(1)", children: [{ text: "(a)", children: [leaf("x"), leaf("y")] }, leaf("(b)")] }, leaf("(2)")] }, leaf("b")] },
+        leaf("Two")
+      ]
+    });
+    expect(validateMemo(five).canGenerate).toBe(false);
+  });
+
+  it("blocks an authority line on a memorandum for record", () => {
+    expect(validateMemo(createSyntheticSpec({ type: "mfr", authorityLine: "FOR THE COMMANDER:" })).canGenerate).toBe(false);
+  });
 });

@@ -178,7 +178,7 @@ function MemoBlockEditor({
             <button
               aria-label={`Indent paragraph ${index + 1}`}
               className="icon-button"
-              disabled={index === 0 || block.depth >= Math.min(5, blocks[index - 1].depth + 1)}
+              disabled={index === 0 || block.depth >= Math.min(3, blocks[index - 1].depth + 1)}
               onClick={() => updateBlock(block.id, { depth: block.depth + 1 })}
               title="Indent"
               type="button"
@@ -219,7 +219,7 @@ function MemoBlockEditor({
             <button className="text-button" onClick={() => addAfter(index, block.depth)} type="button">
               Add paragraph
             </button>
-            <button className="text-button" onClick={() => addAfter(index, Math.min(5, block.depth + 1))} type="button">
+            <button className="text-button" onClick={() => addAfter(index, Math.min(3, block.depth + 1))} type="button">
               Add subparagraph
             </button>
           </div>

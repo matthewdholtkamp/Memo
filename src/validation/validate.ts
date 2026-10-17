@@ -24,7 +24,7 @@ const DATE_PATTERN =
 const SENTENCE_SPACING_PATTERN = /[.?] (?=\S)/;
 const ACRONYM_PATTERN = /\b[A-Z][A-Z0-9-]{1,}\b/g;
 const EXPANDED_ACRONYM_PATTERN = /\(([A-Z][A-Z0-9-]{1,})\)/g;
-const MAX_DEPTH = 5;
+const MAX_DEPTH = 3; // AR 25-50 fig 2-1: 1., a., (1), (a); do not subdivide beyond the third subdivision
 const COMPLIANCE_TARGETS: Record<
   string,
   { stage: MemoStage; focusTarget?: string }
@@ -37,6 +37,9 @@ const COMPLIANCE_TARGETS: Record<
   signature: { stage: "closing", focusTarget: "signature-name" },
   "lone-child": { stage: "body", focusTarget: "body-blocks" },
   nesting: { stage: "body", focusTarget: "body-blocks" },
+  "mfr-authority": { stage: "closing", focusTarget: "signature-name" },
+  "mfr-thru": { stage: "closing" },
+  "thru-count": { stage: "closing" },
   "right-margin": { stage: "body", focusTarget: "body-blocks" },
   "paragraph-length": { stage: "body", focusTarget: "body-blocks" },
   "sentence-spacing": { stage: "body", focusTarget: "sentence-spacing-tool" },
@@ -160,7 +163,22 @@ export function validateMemo(spec: MemoSpec): ValidationResult {
   );
   if (hasDeepNesting) {
     items.push(
-      item("nesting", "Paragraph nesting too deep", "fail", "Use no more than six numbering levels.")
+      item("nesting", "Paragraph nesting too deep", "fail", "AR 25-50 allows four levels: 1., a., (1), (a). Do not subdivide further.")
+    );
+  }
+  if (spec.type === "mfr" && spec.authorityLine?.trim()) {
+    items.push(
+      item("mfr-authority", "No authority line on an MFR", "fail", "AR 25-50 fig 2-17: do not use an authority line on a memorandum for record. Turn off the authority line.")
+    );
+  }
+  if (spec.type !== "memo" && trimmed(spec.thru).length > 0) {
+    items.push(
+      item("mfr-thru", "THRU not used on an MFR", "warn", "A memorandum for record has no THRU or FOR lines; THRU entries are left off the document.")
+    );
+  }
+  if (spec.type === "memo" && trimmed(spec.thru).length > 2) {
+    items.push(
+      item("thru-count", "More than two THRU addressees", "warn", "AR 25-50 fig 2-12: do not use more than two THRU addressees unless absolutely necessary.")
     );
   }
   items.push(

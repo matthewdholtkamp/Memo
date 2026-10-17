@@ -45,23 +45,24 @@ describe("buildDocx", () => {
     expect(xml.document).toContain('w:w="12240"');
     expect(xml.document).toContain('w:h="15840"');
     expect(xml.document).toContain("ABCD-EF (25-50a)");
-    expect(xml.document).toContain("SUBJECT:  Clinic Workflow Update");
+    expect(xml.document).toContain("SUBJECT: Clinic Workflow Update");
     expect(xml.document).toContain("1.  Purpose.");
     expect(xml.document).toContain("a.  Teams will identify");
     expect(xml.document).toContain('w:firstLine="360"');
     expect(xml.document).toContain('w:left="0"');
     expect(xml.document).toContain('w:left="4680"');
-    expect(xml.document).toContain('<w:jc w:val="right"/>');
+    expect(xml.document).toContain('<w:tab w:val="right" w:pos="9360"/>');
     expect(xml.document).toContain("JORDAN A. RIVERA");
     expect(xml.document).toContain("<w:titlePg/>");
   });
 
-  it("automatically numbers a single-paragraph memorandum", async () => {
+  it("does not number a one-paragraph memorandum (AR 25-50 fig 2-13)", async () => {
     const spec = createSyntheticSpec({
       paragraphs: [{ text: "Purpose.  This is a single paragraph memorandum.", children: [] }]
     });
     const xml = await docxXml(spec);
-    expect(xml.document).toContain("1.  Purpose.  This is a single paragraph memorandum.");
+    expect(xml.document).toContain(">Purpose.  This is a single paragraph memorandum.<");
+    expect(xml.document).not.toContain("1.  Purpose.");
   });
 
   it("keeps one blank paragraph before the subject and two before the body", async () => {
@@ -79,13 +80,13 @@ describe("buildDocx", () => {
       countEmptyParagraphsBetween(
         xml.document,
         `MEMORANDUM FOR ${addressee}`,
-        `SUBJECT:  ${subject}`
+        `SUBJECT: ${subject}`
       )
     ).toBe(1);
     expect(
       countEmptyParagraphsBetween(
         xml.document,
-        `SUBJECT:  ${subject}`,
+        `SUBJECT: ${subject}`,
         "1.  Purpose."
       )
     ).toBe(2);
@@ -114,7 +115,8 @@ describe("buildDocx", () => {
         "<w:body>",
         "ABCD-EF (25-50a)"
       )
-    ).toBe(3);
+    ).toBe(2);
+    expect(xml.document).toContain('w:top="2160"');
   });
 
   it("renders DHA and Army built-in headers with the same seal placement and shared address", async () => {
@@ -176,23 +178,45 @@ describe("buildDocx", () => {
   it("includes continuation-page office symbol, subject, and page number", async () => {
     const xml = await docxXml();
     expect(xml.header).toContain("ABCD-EF (25-50a)");
-    expect(xml.header).toContain("SUBJECT:  Clinic Workflow Update");
+    expect(xml.header).toContain("SUBJECT: Clinic Workflow Update");
+    expect(xml.header).toContain('w:before="720"');
     expect(xml.footer).toContain("PAGE");
   });
 
-  it("renders THRU routing and counseling acknowledgment", async () => {
+  it("renders THRU routing in the AR 25-50 format (figs 2-11, 2-12)", async () => {
+    const one = await docxXml(createSyntheticSpec({ thru: ["Chief of Staff"] }));
+    expect(one.document).toContain("MEMORANDUM THRU Chief of Staff");
+    expect(one.document).toContain(">FOR All Section Leaders<");
+    const two = await docxXml(createSyntheticSpec({ thru: ["Chief of Staff", "Commanding General"] }));
+    expect(two.document).toContain(">MEMORANDUM THRU<");
+    expect(two.document).toContain(">Commanding General<");
+    expect(two.document).not.toContain("MEMORANDUM FOR All Section Leaders");
+  });
+
+  it("lists two to five addressees under MEMORANDUM FOR (fig 2-5)", async () => {
+    const xml = await docxXml(createSyntheticSpec({ addressees: ["Alpha Office", "Bravo Office"] }));
+    expect(xml.document).toContain(">MEMORANDUM FOR<");
+    expect(xml.document).toMatch(/w:left="360" w:hanging="360"[^]*?Alpha Office/);
+  });
+
+  it("counts enclosures and puts MFRs on plain paper", async () => {
+    const encl = await docxXml(createSyntheticSpec({ enclosures: ["One", "Two"] }));
+    expect(encl.document).toContain(">2 Encls<");
+    const mfr = await docxXml(createSyntheticSpec({ type: "mfr" }));
+    expect(mfr.document).toContain('w:top="1440"');
+    expect(mfr.firstHeader).toBe("");
+  });
+
+  it("renders the counseling acknowledgment", async () => {
     const xml = await docxXml(
       createSyntheticSpec({
         type: "counseling",
-        thru: ["Chief of Staff", "Commanding General"],
         acknowledgment: {
           statement: "I received and understand this synthetic counseling.",
           signers: [{ label: "RATED OFFICER" }, { label: "SENIOR RATER" }]
         }
       })
     );
-    expect(xml.document).toContain("MEMORANDUM THRU Chief of Staff");
-    expect(xml.document).toContain("THRU Commanding General");
     expect(xml.document).toContain("MEMORANDUM FOR RECORD");
     expect(xml.document).toContain("ACKNOWLEDGMENT");
   });

@@ -8,7 +8,7 @@ export const INDENT_STEP = 360;
 export const SIGNATURE_LEFT = 4680;
 export const SINGLE_LINE = 240;
 export const PARAGRAPH_AFTER = 200;
-export const MAX_NUMBERING_DEPTH = 5;
+export const MAX_NUMBERING_DEPTH = 3;
 
 export function paragraphLabel(depth: number, ordinal: number): string {
   const letter = String.fromCharCode(96 + Math.min(ordinal, 26));
