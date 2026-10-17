@@ -1,44 +1,62 @@
-// ArmyMemo PDF engine (pdf-lib). Port of buildDocx.ts: same layout, page by page, in points.
-// Letter page 612 x 792 pt, 1 in margins, letterhead header at 0.5 in, continuation header/footer.
-import { PDFDocument, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+// ArmyMemo PDF engine (pdf-lib), built to AR 25-50 (10 Oct 2020, admin revision 4 Oct 2024),
+// chapter 2, figures 2-1 through 2-17, chapter 4 (enclosures) and paragraph 6-4 (signature block).
+// Letterhead geometry is measured from the APD letterhead template as it prints on real
+// signed memorandums. All positions are PDF points from the TOP of the page (72 pt = 1 inch).
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFImage,
+  type PDFPage,
+  type RGB
+} from "pdf-lib";
 import type { MemoSpec, ParagraphNode } from "../model/memoSpec";
 import { validateMemo } from "../validation/validate";
 import { paragraphLabel } from "./format";
 
 const PAGE_W = 612;
 const PAGE_H = 792;
-const MARGIN = 72;
-const HEADER_TOP = 36; // 0.5 in header distance
-const FOOTER_BOTTOM = 36; // 0.5 in footer distance
-const CONTENT_W = PAGE_W - 2 * MARGIN; // 468
-const RIGHT = PAGE_W - MARGIN; // 540
-const INDENT = 18; // 0.25 in
-const SIG_X = MARGIN + 234; // 3.25 in from margin = page center
+const MARGIN = 72; // 1 inch left, right, bottom; continuation pages start 1 inch from the top
+const RIGHT = PAGE_W - MARGIN;
+const CONTENT_W = RIGHT - MARGIN; // 468
 const BODY_SIZE = 12;
-const LETTERHEAD_SIZE = 10;
-const LINE_FACTOR = 1.15; // Word single spacing for Arial / Times New Roman
-const ASCENT_FACTOR = 0.905;
-const PARA_AFTER = 10; // 200 twips
-const SEAL_X = 36;
+const LH = 13.8; // one single-spaced line of 12-point Arial or Times New Roman
+const BASELINE = 10.9; // distance from a line's top to its baseline
+const INDENT = 18; // 1/4 inch
+const SIG_X = PAGE_W / 2; // signature block begins at the center of the page
+const ENCL_W = SIG_X - MARGIN - 12; // enclosure column, left of the signature block
+const BODY_BOTTOM = PAGE_H - MARGIN; // 1-inch bottom margin
+const PAGE_NUMBER_TOP = BODY_BOTTOM; // centered, approximately 1 inch from the bottom
+const SEAL_X = 36; // seal: 1 inch, 1/2 inch from the left and top edges
 const SEAL_TOP = 36;
-const SEAL_SIZE = 72; // 1 in
-const BODY_BOTTOM = PAGE_H - MARGIN; // 720
+const SEAL_SIZE = 72;
+const OFFICE_TOP_LETTERHEAD = SEAL_TOP + SEAL_SIZE + 2 * LH; // office symbol: second line below the seal
+const NAVY = rgb(0, 0, 0.5);
+const BLACK = rgb(0, 0, 0);
+// Subparagraph first-line indent by level: 1. at the margin, a. 1/4 in, (1) 1/2 in, (a) 1/2 in
+// ("Do not indent any further than the second subdivision" - fig 2-1).
+const LEVEL_INDENT = [0, INDENT, 2 * INDENT, 2 * INDENT];
 
-type Fonts = { regular: PDFFont; bold: PDFFont };
-type Line = { text: string; x: number; width: number; bold?: boolean; align?: "left" | "right" | "center"; size?: number };
-// A block is a set of lines laid out top-down; `keep` blocks never split across pages.
-// `reserve` is extra height (e.g. the signature block) that must land on the same page as this block.
-type Block = { lines: Line[]; after: number; keep: boolean; keepWithNext?: boolean; columns?: Line[][]; reserve?: number };
-
-const lineHeight = (size: number) => size * LINE_FACTOR;
+type Fonts = { regular: PDFFont; bold: PDFFont; lhBold: PDFFont; lhRegular: PDFFont };
+type Seg = { text: string; x: number; width: number; bold?: boolean; align?: "left" | "right" | "center" };
+type Row = Seg[];
+type Block = {
+  rows: Row[];
+  gap: number; // blank lines before the block (dropped at the top of a continuation page)
+  splittable?: boolean; // body paragraphs of 4+ lines may split, 2+ lines on each page
+  keepWithNext?: boolean; // keep with the first line of the next block
+  lastBody?: boolean; // last body paragraph: carries 2+ lines onto the closing's page
+  closing?: boolean;
+};
 
 function makeSanitizer(font: PDFFont) {
   const cache = new Map<string, boolean>();
-  const replacements: Record<string, string> = { "‑": "-", " ": " ", " ": " ", "​": "" };
+  const swaps: Record<string, string> = { "‑": "-", " ": " ", " ": " ", "​": "" };
   return (text: string): string =>
     Array.from(text)
       .map((ch) => {
-        if (replacements[ch] !== undefined) return replacements[ch];
+        if (swaps[ch] !== undefined) return swaps[ch];
         if (!cache.has(ch)) {
           try {
             font.encodeText(ch);
@@ -52,7 +70,7 @@ function makeSanitizer(font: PDFFont) {
       .join("");
 }
 
-// Wrap preserving interior double spaces (AR 25-50 two spaces after sentences).
+// Word wrap that keeps interior double spaces (two spaces after periods and question marks).
 function wrap(text: string, font: PDFFont, size: number, firstWidth: number, restWidth: number): string[] {
   const tokens = text.replace(/\t/g, " ").match(/\S+|\s+/g) ?? [""];
   const lines: string[] = [];
@@ -64,9 +82,8 @@ function wrap(text: string, font: PDFFont, size: number, firstWidth: number, res
       if (current) current += token;
       continue;
     }
-    const candidate = current + token;
-    if (fits(candidate)) {
-      current = candidate;
+    if (fits(current + token)) {
+      current += token;
       continue;
     }
     if (current.trim()) {
@@ -86,133 +103,29 @@ function wrap(text: string, font: PDFFont, size: number, firstWidth: number, res
   return lines;
 }
 
-class Layout {
-  doc: PDFDocument;
-  fonts: Fonts;
-  spec: MemoSpec;
-  pages: PDFPage[] = [];
-  y = 0; // distance from top of page
-  firstBodyTop: number;
-  contBodyTop: number;
-  clean: (text: string) => string;
-
-  constructor(doc: PDFDocument, fonts: Fonts, spec: MemoSpec, firstBodyTop: number, contBodyTop: number) {
-    this.doc = doc;
-    this.fonts = fonts;
-    this.spec = spec;
-    this.firstBodyTop = firstBodyTop;
-    this.contBodyTop = contBodyTop;
-    this.clean = makeSanitizer(fonts.regular);
-    this.newPage();
-  }
-
-  newPage() {
-    this.pages.push(this.doc.addPage([PAGE_W, PAGE_H]));
-    this.y = this.pages.length === 1 ? this.firstBodyTop : this.contBodyTop;
-  }
-
-  get page() {
-    return this.pages[this.pages.length - 1];
-  }
-
-  drawLine(page: PDFPage, line: Line, top: number) {
-    const size = line.size ?? BODY_SIZE;
-    const font = line.bold ? this.fonts.bold : this.fonts.regular;
-    const text = this.clean(line.text);
-    if (!text) return;
-    const w = font.widthOfTextAtSize(text, size);
-    const x = line.align === "right" ? line.x + line.width - w : line.align === "center" ? line.x + (line.width - w) / 2 : line.x;
-    page.drawText(text, { x, y: PAGE_H - top - size * ASCENT_FACTOR, size, font });
-  }
-
-  blank(count = 1) {
-    for (let i = 0; i < count; i += 1) {
-      if (this.y + lineHeight(BODY_SIZE) > BODY_BOTTOM + 0.01) this.newPage();
-      else this.y += lineHeight(BODY_SIZE);
-    }
-  }
-
-  blockHeight(block: Block): number {
-    if (block.columns) return Math.max(...block.columns.map((col) => col.length)) * lineHeight(BODY_SIZE);
-    return block.lines.length * lineHeight(BODY_SIZE);
-  }
-
-  place(block: Block, next?: Block) {
-    const lh = lineHeight(BODY_SIZE);
-    const room = () => BODY_BOTTOM - this.y + 0.01;
-    const height = this.blockHeight(block);
-    const groupHeight =
-      block.keepWithNext && next
-        ? height + block.after + this.blockHeight(next)
-        : block.reserve
-          ? height + block.after + block.reserve
-          : height;
-    const pageCapacity = BODY_BOTTOM - this.contBodyTop;
-
-    if (block.columns) {
-      if (height > room() && height <= pageCapacity) this.newPage();
-      const top = this.y;
-      block.columns.forEach((col) => col.forEach((line, i) => this.drawLine(this.page, line, top + i * lh)));
-      this.y = top + height + block.after;
-      return;
-    }
-
-    if ((block.keep || block.keepWithNext) && groupHeight > room() && groupHeight <= pageCapacity) {
-      this.newPage();
-    }
-    // Split with widow/orphan control (at least 2 lines on each side) when the block cannot fit.
-    let index = 0;
-    while (index < block.lines.length) {
-      const fitCount = Math.floor(room() / lh);
-      const remaining = block.lines.length - index;
-      if (fitCount >= remaining) {
-        block.lines.slice(index).forEach((line, i) => this.drawLine(this.page, line, this.y + i * lh));
-        this.y += remaining * lh;
-        index = block.lines.length;
-        break;
-      }
-      let take = fitCount;
-      if (remaining - take < 2) take = remaining - 2;
-      if (take < 2) {
-        this.newPage();
-        continue;
-      }
-      block.lines.slice(index, index + take).forEach((line, i) => this.drawLine(this.page, line, this.y + i * lh));
-      index += take;
-      this.newPage();
-    }
-    this.y = Math.min(this.y + block.after, BODY_BOTTOM);
-  }
-
-  text(text: string, opts: { x?: number; width?: number; firstIndent?: number; bold?: boolean; align?: Line["align"] } = {}): Line[] {
-    const x = opts.x ?? MARGIN;
-    const width = opts.width ?? RIGHT - x;
-    const first = opts.firstIndent ?? 0;
-    const font = opts.bold ? this.fonts.bold : this.fonts.regular;
-    return wrap(this.clean(text), font, BODY_SIZE, width - first, width).map((value, i) => ({
-      text: value,
-      x: i === 0 ? x + first : x,
-      width: i === 0 ? width - first : width,
-      bold: opts.bold,
-      align: opts.align
-    }));
-  }
-}
+const trimmedList = (values: string[]) => values.map((v) => v.trim()).filter(Boolean);
 
 function fullOfficeSymbol(spec: MemoSpec): string {
   const arims = spec.arimsRecordNumber.trim();
   return arims ? `${spec.officeSymbol.trim()} (${arims})` : spec.officeSymbol.trim();
 }
 
-function trimmedList(values: string[]): string[] {
-  return values.map((v) => v.trim()).filter(Boolean);
-}
-
 function dataUrlBytes(dataUrl: string): { bytes: Uint8Array; type: "png" | "jpg" } | null {
   const match = dataUrl.match(/^data:image\/(png|jpe?g);base64,(.+)$/);
   if (!match) return null;
-  const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-  return { bytes, type: match[1] === "png" ? "png" : "jpg" };
+  return { bytes: Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0)), type: match[1] === "png" ? "png" : "jpg" };
+}
+
+// 2-5c(2): at least two words of a divided sentence on each page.
+function sentenceSplitOk(lastOnPage: string, firstOnNext: string): boolean {
+  const before = lastOnPage.trimEnd();
+  if (!/[.?!]["')\]]?$/.test(before)) {
+    const tail = before.split(/(?<=[.?!]["')\]]?)\s+/).pop() ?? "";
+    if (tail.trim().split(/\s+/).filter(Boolean).length < 2) return false;
+  }
+  const head = firstOnNext.trimStart().match(/^(.*?[.?!]["')\]]?)(\s|$)/);
+  if (head && head[1].split(/\s+/).filter(Boolean).length < 2) return false;
+  return true;
 }
 
 export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
@@ -222,143 +135,295 @@ export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
   }
 
   const doc = await PDFDocument.create();
-  const fonts: Fonts =
-    spec.font === "Times New Roman"
-      ? { regular: await doc.embedFont(StandardFonts.TimesRoman), bold: await doc.embedFont(StandardFonts.TimesRomanBold) }
-      : { regular: await doc.embedFont(StandardFonts.Helvetica), bold: await doc.embedFont(StandardFonts.HelveticaBold) };
+  const times = spec.font === "Times New Roman";
+  const dhaStyle = spec.letterhead.letterheadStyle === "dha";
+  const fonts: Fonts = {
+    regular: await doc.embedFont(times ? StandardFonts.TimesRoman : StandardFonts.Helvetica),
+    bold: await doc.embedFont(times ? StandardFonts.TimesRomanBold : StandardFonts.HelveticaBold),
+    lhBold: await doc.embedFont(dhaStyle ? StandardFonts.TimesRomanBold : StandardFonts.HelveticaBold),
+    lhRegular: await doc.embedFont(dhaStyle ? StandardFonts.TimesRoman : StandardFonts.HelveticaBold)
+  };
   const clean = makeSanitizer(fonts.regular);
+  const isRecord = spec.type === "mfr" || spec.type === "counseling";
+  // Figure 2-17: a memorandum for record is typed on plain white paper (no letterhead).
+  const useLetterhead = spec.type !== "mfr";
 
-  // Letterhead lines (10 pt bold, centered); body starts below whichever is lower: margin or header.
-  const lhLines = spec.letterhead.orgLines
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .flatMap((line) => wrap(clean(line), fonts.bold, LETTERHEAD_SIZE, CONTENT_W, CONTENT_W));
-  const letterheadBottom = HEADER_TOP + lhLines.length * lineHeight(LETTERHEAD_SIZE);
-  const subjectHeader = wrap(clean(`SUBJECT:  ${spec.subject.trim()}`), fonts.regular, BODY_SIZE, CONTENT_W, CONTENT_W);
-  const contHeaderBottom = HEADER_TOP + (1 + subjectHeader.length) * lineHeight(BODY_SIZE);
-
-  const L = new Layout(doc, fonts, spec, Math.max(MARGIN, letterheadBottom), Math.max(MARGIN, contHeaderBottom));
-  const lh = lineHeight(BODY_SIZE);
-  const blocks: Block[] = [];
-  const push = (lines: Line[], after = 0, keep = false, keepWithNext = false) => blocks.push({ lines, after, keep, keepWithNext });
-  const blankBlock = (n = 1) => {
-    for (let i = 0; i < n; i += 1) blocks.push({ lines: [{ text: "", x: MARGIN, width: CONTENT_W }], after: 0, keep: false });
+  // Text -> rows. firstIndent applies to the first line only; runIndent to every runover line.
+  const text = (
+    value: string,
+    o: { x?: number; width?: number; firstIndent?: number; runIndent?: number; bold?: boolean; align?: Seg["align"] } = {}
+  ): Row[] => {
+    const x = o.x ?? MARGIN;
+    const width = o.width ?? RIGHT - x;
+    const first = o.firstIndent ?? 0;
+    const run = o.runIndent ?? 0;
+    const font = o.bold ? fonts.bold : fonts.regular;
+    return wrap(clean(value), font, BODY_SIZE, width - first, width - run).map((line, i) => [
+      { text: line, x: x + (i === 0 ? first : run), width: width - (i === 0 ? first : run), bold: o.bold, align: o.align }
+    ]);
   };
 
-  // ---- Heading ----
-  blankBlock(3);
+  // ---------------- Page 1 heading (absolute positions) ----------------
+  let officeTop = useLetterhead ? OFFICE_TOP_LETTERHEAD : MARGIN;
+  let suspenseTop: number | null = null;
   if (spec.suspense?.trim()) {
-    push(L.text(`S: ${spec.suspense.trim()}`, { bold: true, align: "right" }));
-    blankBlock(1);
+    // Suspense: flush right, bold, two lines above the date line.
+    suspenseTop = officeTop - 2 * LH;
+    if (suspenseTop < MARGIN) {
+      suspenseTop = MARGIN;
+      officeTop = MARGIN + 2 * LH;
+    }
   }
-  const half = CONTENT_W / 2;
-  blocks.push({
-    lines: [],
-    after: 0,
-    keep: true,
-    columns: [
-      L.text(fullOfficeSymbol(spec), { x: MARGIN, width: half }),
-      L.text(spec.date.trim() || "[DATE]", { x: MARGIN + half, width: half, align: "right" })
-    ]
-  });
-  blankBlock(2);
-  trimmedList(spec.thru).forEach((recipient, i) => push(L.text(i === 0 ? `MEMORANDUM THRU ${recipient}` : `THRU ${recipient}`)));
-  const addressees = trimmedList(spec.addressees);
-  const useDistribution = trimmedList(spec.distribution).length > 0 || addressees.length > 5;
-  if (spec.type === "mfr" || spec.type === "counseling") {
-    push(L.text("MEMORANDUM FOR RECORD"));
-  } else {
-    push(L.text(useDistribution ? "MEMORANDUM FOR SEE DISTRIBUTION" : `MEMORANDUM FOR ${addressees[0] ?? ""}`));
-    if (!useDistribution) addressees.slice(1).forEach((recipient) => push(L.text(recipient, { firstIndent: INDENT })));
-  }
-  blankBlock(1);
-  push(L.text(`SUBJECT:  ${spec.subject.trim()}`));
-  blankBlock(2);
+  const dateText = clean(spec.date.trim() || "[DATE]");
+  const dateWidth = fonts.regular.widthOfTextAtSize(dateText, BODY_SIZE);
+  const officeRows = text(fullOfficeSymbol(spec), { width: CONTENT_W - dateWidth - 24 });
+  officeRows[0].push({ text: dateText, x: MARGIN, width: CONTENT_W, align: "right" });
 
-  // ---- Body (numbered, block style: runover returns to left margin) ----
-  const appendBody = (nodes: ParagraphNode[], depth = 0) => {
+  // ---------------- Flowing blocks ----------------
+  const blocks: Block[] = [];
+  const addressees = trimmedList(spec.addressees);
+  const distribution = trimmedList(spec.distribution).length ? trimmedList(spec.distribution) : addressees.length > 5 ? addressees : [];
+  const seeDistribution = distribution.length > 0;
+  const addrList = (list: string[], gap: number) =>
+    list.forEach((addr, i) => blocks.push({ rows: text(addr, { runIndent: INDENT }), gap: i === 0 ? gap : 0 }));
+
+  if (isRecord) {
+    blocks.push({ rows: text("MEMORANDUM FOR RECORD"), gap: 2 });
+  } else {
+    const thru = trimmedList(spec.thru);
+    const forTarget = seeDistribution ? ["SEE DISTRIBUTION"] : addressees;
+    if (thru.length === 1) {
+      // Fig 2-11: MEMORANDUM THRU and the address on one line; runover flush left.
+      blocks.push({ rows: text(`MEMORANDUM THRU ${thru[0]}`), gap: 2 });
+    } else if (thru.length > 1) {
+      // Fig 2-12: MEMORANDUM THRU alone, then each address; runover indented 1/4 inch.
+      blocks.push({ rows: text("MEMORANDUM THRU"), gap: 2 });
+      addrList(thru, 1);
+    }
+    const lead = thru.length ? "FOR" : "MEMORANDUM FOR";
+    const leadGap = thru.length ? 1 : 2;
+    if (forTarget.length <= 1) {
+      // Single address: on the same line; runover flush with the left margin.
+      blocks.push({ rows: text(`${lead} ${forTarget[0] ?? ""}`.trimEnd()), gap: leadGap });
+    } else {
+      // Multiple-address (2 to 5): each address on its own line, runover indented 1/4 inch (figs 2-5, 2-7).
+      blocks.push({ rows: text(lead), gap: leadGap });
+      addrList(forTarget, 1);
+    }
+  }
+  // SUBJECT: one space after the colon (para 1-39b(9), fig 2-17).
+  blocks.push({ rows: text(`SUBJECT: ${spec.subject.trim()}`), gap: 1 });
+
+  // Body. A one-paragraph memorandum is not numbered (fig 2-13); its subparagraphs still are.
+  const single = spec.paragraphs.length === 1;
+  const bodyStart = blocks.length;
+  const appendBody = (nodes: ParagraphNode[], depth: number) => {
     nodes.forEach((node, index) => {
-      push(L.text(`${paragraphLabel(depth, index + 1)}  ${node.text.trim()}`, { firstIndent: depth * INDENT }), PARA_AFTER, true);
+      const numbered = !(single && depth === 0);
+      const label = numbered ? `${paragraphLabel(depth, index + 1)}  ` : "";
+      const rows = text(`${label}${node.text.trim()}`, { firstIndent: numbered ? LEVEL_INDENT[Math.min(depth, 3)] : 0 });
+      blocks.push({ rows, gap: blocks.length === bodyStart ? 2 : 1, splittable: rows.length > 3 });
       appendBody(node.children, depth + 1);
     });
   };
-  appendBody(spec.paragraphs);
+  appendBody(spec.paragraphs, 0);
+  blocks[blocks.length - 1].lastBody = true;
 
-  // ---- Closing ----
-  const sigLines = (x: number): Line[] => {
-    const width = RIGHT - x;
-    const lines: Line[] = [...L.text(spec.signature.name.trim().toUpperCase(), { x, width })];
-    if (!spec.signature.civilian) lines.push(...L.text(spec.signature.rankBranch.trim(), { x, width }));
-    trimmedList(spec.signature.title).forEach((title, i) => lines.push(...L.text(title, { x: x + (i === 0 ? 0 : INDENT), width: width - (i === 0 ? 0 : INDENT) })));
-    return lines;
-  };
-  const authority = spec.authorityLine?.trim();
-  if (authority) {
-    blankBlock(1);
-    // Authority line, the four blank signature lines, and the signature block stay together.
-    const encl = trimmedList(spec.enclosures);
-    const closingLines = Math.max(sigLines(SIG_X).length, encl.length ? encl.length + 1 : 0);
-    blocks.push({ lines: L.text(authority.toUpperCase()), after: 4 * lh, keep: true, reserve: closingLines * lh });
-  } else {
-    blankBlock(4);
-  }
+  // Closing: authority line (2nd line below text), signature block (5th line below the authority
+  // line or text) at page center, enclosure listing at the left margin on the same line.
+  const sig: Row[] = [];
+  const sigText = (value: string, indent = 0) => text(value, { x: SIG_X + indent, runIndent: indent ? 0 : INDENT });
+  sig.push(...sigText(spec.signature.name.trim().toUpperCase()));
+  if (!spec.signature.civilian) sig.push(...sigText(spec.signature.rankBranch.trim()));
+  // Title runover (a long title) continues on the next line indented 1/4 inch (para 6-4c).
+  trimmedList(spec.signature.title).forEach((title, i) => sig.push(...(i === 0 ? sigText(title) : sigText(title, INDENT))));
   const enclosures = trimmedList(spec.enclosures);
-  if (enclosures.length === 0) {
-    push(sigLines(SIG_X), 0, true);
-  } else {
-    const left: Line[] =
-      enclosures.length === 1
-        ? [...L.text("Encl", { width: 234 - 6 }), ...L.text(enclosures[0], { width: 234 - 6 })]
-        : [...L.text("Encls", { width: 234 - 6 }), ...enclosures.flatMap((e, i) => L.text(`${i + 1}. ${e}`, { width: 234 - 6 }))];
-    blocks.push({ lines: [], after: 0, keep: true, columns: [left, sigLines(SIG_X)] });
+  const encl: Row[] = [];
+  if (enclosures.length === 1) {
+    encl.push(...text("Encl", { width: ENCL_W }), ...text(enclosures[0], { width: ENCL_W }));
+  } else if (enclosures.length > 1) {
+    encl.push(...text(`${enclosures.length} Encls`, { width: ENCL_W }));
+    enclosures.forEach((e, i) => {
+      const label = `${i + 1}. `;
+      const hang = fonts.regular.widthOfTextAtSize(label, BODY_SIZE);
+      encl.push(...text(`${label}${e}`, { width: ENCL_W, runIndent: hang }));
+    });
   }
+  const closingRows: Row[] = [];
+  const authority = spec.type === "mfr" ? "" : spec.authorityLine?.trim() ?? "";
+  if (authority) {
+    closingRows.push(...text(authority.toUpperCase()));
+    for (let i = 0; i < 4; i += 1) closingRows.push([]);
+  }
+  for (let i = 0; i < Math.max(sig.length, encl.length); i += 1) closingRows.push([...(encl[i] ?? []), ...(sig[i] ?? [])]);
+  blocks.push({ rows: closingRows, gap: authority ? 1 : 4, closing: true });
 
-  // ---- Post-closing ----
-  const cf = trimmedList(spec.cfRecipients);
-  const distribution = trimmedList(spec.distribution).length ? trimmedList(spec.distribution) : addressees.length > 5 ? addressees : [];
   if (distribution.length) {
-    blankBlock(1);
-    push(L.text("DISTRIBUTION:"), 0, false, true);
-    distribution.forEach((r) => push(L.text(r)));
+    blocks.push({ rows: text("DISTRIBUTION:"), gap: 1, keepWithNext: true });
+    distribution.forEach((d) => blocks.push({ rows: text(d), gap: 0 }));
   }
+  const cf = trimmedList(spec.cfRecipients);
   if (cf.length) {
-    blankBlock(1);
-    push(L.text("CF:"), 0, false, true);
-    cf.forEach((r) => push(L.text(r)));
+    blocks.push({ rows: text("CF:"), gap: 1, keepWithNext: true });
+    cf.forEach((c) => blocks.push({ rows: text(c), gap: 0 }));
   }
   if (spec.type === "counseling" && spec.acknowledgment) {
-    blankBlock(1);
-    push(L.text("ACKNOWLEDGMENT"), PARA_AFTER, false, true);
-    push([...L.text(spec.acknowledgment.statement), ...spec.acknowledgment.signers.flatMap((s) => L.text(s.label))], 0, true);
+    const ack: Row[] = [...text("ACKNOWLEDGMENT"), [], ...text(spec.acknowledgment.statement)];
+    spec.acknowledgment.signers.forEach((s) => ack.push(...text(s.label)));
+    blocks.push({ rows: ack, gap: 1 });
   }
 
-  // ---- Place blocks ----
-  blocks.forEach((block, i) => {
-    const isBlank = block.lines.length === 1 && block.lines[0].text === "" && !block.columns;
-    if (isBlank) {
-      // Blank lines never start a continuation page.
-      if (L.y + lh > BODY_BOTTOM + 0.01) return;
-      L.y += lh;
-      return;
-    }
-    L.place(block, blocks[i + 1]);
-  });
+  // ---------------- Pagination ----------------
+  const contHeaderRows = [...text(fullOfficeSymbol(spec)), ...text(`SUBJECT: ${spec.subject.trim()}`)];
+  const contBodyTop = MARGIN + contHeaderRows.length * LH + 2 * LH; // text on the 3rd line below the subject
 
-  // ---- Headers and footers ----
-  const seal = spec.letterhead.sealImageDataUrl ? dataUrlBytes(spec.letterhead.sealImageDataUrl) : null;
-  let sealImage: PDFImage | null = null;
-  if (seal) sealImage = seal.type === "png" ? await doc.embedPng(seal.bytes) : await doc.embedJpg(seal.bytes);
-  L.pages.forEach((page, index) => {
-    if (index === 0) {
-      if (sealImage) page.drawImage(sealImage, { x: SEAL_X, y: PAGE_H - SEAL_TOP - SEAL_SIZE, width: SEAL_SIZE, height: SEAL_SIZE });
-      lhLines.forEach((text, i) =>
-        L.drawLine(page, { text, x: MARGIN, width: CONTENT_W, bold: true, align: "center", size: LETTERHEAD_SIZE }, HEADER_TOP + i * lineHeight(LETTERHEAD_SIZE))
-      );
-      return;
+  type Placed = { page: number; top: number; row: Row };
+  const placed: Placed[] = [];
+  let page = 0;
+  let y = officeTop + officeRows.length * LH;
+  let atPageTop = false;
+  const newPage = () => {
+    page += 1;
+    y = contBodyTop;
+    atPageTop = true;
+  };
+  const put = (rows: Row[]) => {
+    rows.forEach((row) => {
+      placed.push({ page, top: y, row });
+      y += LH;
+    });
+    atPageTop = false;
+  };
+  const room = () => Math.floor((BODY_BOTTOM - y + 0.01) / LH);
+  const gapOf = (b: Block) => (atPageTop ? 0 : b.gap);
+  const pageLines = Math.floor((BODY_BOTTOM - contBodyTop + 0.01) / LH);
+
+  // Split point for a paragraph: 2+ lines on each page and 2+ words of a divided sentence on each page.
+  const splitAt = (rows: Row[], avail: number, force: boolean): number => {
+    let take = Math.min(avail, rows.length - 2);
+    if (force) return take;
+    while (take >= 2 && !sentenceSplitOk(rows[take - 1][0]?.text ?? "", rows[take][0]?.text ?? "")) take -= 1;
+    return take;
+  };
+  const placeSplittable = (b: Block) => {
+    let rows = b.rows;
+    let gap = gapOf(b);
+    for (;;) {
+      const avail = room() - gap;
+      if (rows.length <= avail) {
+        y += gap * LH;
+        put(rows);
+        return;
+      }
+      const take = splitAt(rows, avail, atPageTop);
+      if (take < 2) {
+        if (atPageTop) {
+          put(rows); // cannot satisfy the rules on an empty page; place as is
+          return;
+        }
+        newPage();
+        gap = 0;
+        continue;
+      }
+      y += gap * LH;
+      put(rows.slice(0, take));
+      rows = rows.slice(take);
+      newPage();
+      gap = 0;
     }
-    L.drawLine(page, { text: fullOfficeSymbol(spec), x: MARGIN, width: CONTENT_W }, HEADER_TOP);
-    subjectHeader.forEach((text, i) => L.drawLine(page, { text, x: MARGIN, width: CONTENT_W }, HEADER_TOP + (i + 1) * lh));
-    L.drawLine(page, { text: String(index + 1), x: MARGIN, width: CONTENT_W, align: "center" }, PAGE_H - FOOTER_BOTTOM - lh);
+  };
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const b = blocks[i];
+    const next = blocks[i + 1];
+    if (b.lastBody && next?.closing) {
+      // 2-5c(4): the authority line and signature block never go to a continuation page without
+      // at least two lines of the last paragraph (a one-line last paragraph may go alone with them).
+      const closingNeed = next.gap + next.rows.length;
+      if (gapOf(b) + b.rows.length + closingNeed <= room()) {
+        y += gapOf(b) * LH;
+        put(b.rows);
+      } else if (b.rows.length <= 3) {
+        // A paragraph of three lines or fewer is never divided: it moves with the closing.
+        newPage();
+        put(b.rows);
+      } else {
+        // Split so the last 2+ lines carry over with the closing.
+        const take = splitAt(b.rows, room() - gapOf(b), false);
+        const rest = b.rows.length - take;
+        if (take >= 2 && rest + closingNeed <= pageLines) {
+          y += gapOf(b) * LH;
+          put(b.rows.slice(0, take));
+          newPage();
+          put(b.rows.slice(take));
+        } else if (b.rows.length + closingNeed <= pageLines) {
+          // No clean split point: move the whole paragraph to the next page with the closing.
+          newPage();
+          put(b.rows);
+        } else {
+          placeSplittable(b);
+        }
+      }
+      i += 1; // place the closing right after
+      y += gapOf(next) * LH;
+      if (next.rows.length > room()) newPage();
+      put(next.rows);
+      continue;
+    }
+    if (b.splittable) {
+      placeSplittable(b);
+      continue;
+    }
+    const need = gapOf(b) + b.rows.length + (b.keepWithNext && next ? next.gap + Math.min(next.rows.length, 1) : 0);
+    if (need > room()) newPage();
+    y += gapOf(b) * LH;
+    put(b.rows);
+  }
+
+  // ---------------- Drawing ----------------
+  const pages: PDFPage[] = [];
+  for (let p = 0; p <= page; p += 1) pages.push(doc.addPage([PAGE_W, PAGE_H]));
+  const draw = (pg: PDFPage, seg: Seg, top: number, font: PDFFont, size = BODY_SIZE, color: RGB = BLACK) => {
+    const value = clean(seg.text);
+    if (!value) return;
+    const w = font.widthOfTextAtSize(value, size);
+    const x = seg.align === "right" ? seg.x + seg.width - w : seg.align === "center" ? seg.x + (seg.width - w) / 2 : seg.x;
+    pg.drawText(value, { x, y: PAGE_H - top - BASELINE * (size / BODY_SIZE), size, font, color });
+  };
+  const drawRow = (pg: PDFPage, row: Row, top: number) => row.forEach((seg) => draw(pg, seg, top, seg.bold ? fonts.bold : fonts.regular));
+
+  // Letterhead (page 1 only).
+  if (useLetterhead) {
+    const seal = spec.letterhead.sealImageDataUrl ? dataUrlBytes(spec.letterhead.sealImageDataUrl) : null;
+    if (seal) {
+      const image: PDFImage = seal.type === "png" ? await doc.embedPng(seal.bytes) : await doc.embedJpg(seal.bytes);
+      pages[0].drawImage(image, { x: SEAL_X, y: PAGE_H - SEAL_TOP - SEAL_SIZE, width: SEAL_SIZE, height: SEAL_SIZE });
+    }
+    // Army (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black.
+    // DHA (DHA letterhead): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, navy.
+    const lines = trimmedList(spec.letterhead.orgLines);
+    let baseline = dhaStyle ? 51 : 59;
+    lines.forEach((line, i) => {
+      const size = dhaStyle ? 12 : i === 0 ? 10 : 8;
+      const font = i === 0 ? fonts.lhBold : fonts.lhRegular;
+      const value = clean(line);
+      const w = font.widthOfTextAtSize(value, size);
+      pages[0].drawText(value, { x: (PAGE_W - w) / 2, y: PAGE_H - baseline, size, font, color: dhaStyle ? NAVY : BLACK });
+      baseline += dhaStyle ? 13.5 : i === 0 ? 9.1 : 9.2;
+    });
+  }
+  if (suspenseTop !== null) {
+    draw(pages[0], { text: `S: ${spec.suspense?.trim() ?? ""}`, x: MARGIN, width: CONTENT_W, align: "right" }, suspenseTop, fonts.bold);
+  }
+  officeRows.forEach((row, i) => drawRow(pages[0], row, officeTop + i * LH));
+  placed.forEach(({ page: p, top, row }) => drawRow(pages[p], row, top));
+
+  // Continuation pages: office symbol 1 inch from the top, subject on the next line,
+  // page number centered approximately 1 inch from the bottom. Page 1 is not numbered.
+  pages.forEach((pg, index) => {
+    if (index === 0) return;
+    contHeaderRows.forEach((row, i) => drawRow(pg, row, MARGIN + i * LH));
+    draw(pg, { text: String(index + 1), x: MARGIN, width: CONTENT_W, align: "center" }, PAGE_NUMBER_TOP, fonts.regular);
   });
 
   doc.setTitle(spec.subject.trim() || "Army memorandum");

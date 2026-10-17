@@ -1,0 +1,29 @@
+ARMYMEMO PDF: AR 25-50 CHECK
+
+Source: AR 25-50, Preparing and Managing Correspondence, 10 October 2020, administrative revision 4 October 2024 (current; pulled from armypubs.army.mil).
+Also measured against real signed memos: MSCoE (Army letterhead, 29 Aug 2025), DHA-Policy Memo 26-038 (2 Jul 2026), SECWAR and USECWAR memos (2026).
+
+FIXED (the PDF was wrong; the Word app has the same issues)
+1. SUBJECT: one space after the colon, not two (para 1-39b(9); fig 2-17).
+2. Continuation pages: office symbol 1 in from the top, not 0.5 in; text starts on the third line below the subject (para 2-5).
+3. Page number about 1 in from the bottom (para 2-5d).
+4. Blank line between paragraphs is a full line (was about 3/4 of a line).
+5. Signature block on the 5th line below the text or authority line exactly (was slightly low).
+6. One-paragraph memo is not numbered (para 2-4b(4)(a); fig 2-13).
+7. Numbering stops at (a): four levels, and (a) is indented the same as (1) (fig 2-1). Levels 5-6 removed.
+8. Two to five addressees: MEMORANDUM FOR on its own line, addresses listed below, runover indented 1/4 in (figs 2-5, 2-7).
+9. THRU: "MEMORANDUM THRU ..." then "FOR ..." (figs 2-11, 2-12). Was printing a second MEMORANDUM FOR.
+10. Enclosures: "2 Encls", "3 Encls" with the count (chap 4).
+11. Long signature title wraps with a 1/4 in indent (para 6-4c).
+12. MFR: plain paper, no letterhead, office symbol 1 in from the top, no authority line (fig 2-17).
+13. Office symbol placed on the second line below the seal; suspense two lines above the date, beside the seal (figs 2-1, 2-2).
+14. Army letterhead text: line 1 Arial Bold 10 pt, address lines Arial Bold 8 pt (matches the APD template on the MSCoE memo). Was 10 pt on every line.
+15. DHA letterhead now matches DHA's own letterhead: Times New Roman, navy, 12 pt.
+16. Page-break rules enforced: no split of a paragraph of 3 lines or fewer; 2+ lines each page; 2+ words of a split sentence each page; signature block never alone (para 2-5c). Tested on 800 randomly generated memos, 0 violations.
+
+ALREADY CORRECT
+Seal (Department of War seal, 1 in, 0.5 in from top and left; matches 2026 SECWAR/DHA letterhead), 1 in margins, ragged right, office symbol + ARIMS in parentheses, date format and placement, MEMORANDUM FOR on 3rd line, SUBJECT on 2nd line, text on 3rd line, two spaces after periods and question marks, block-style runover, authority line placement, signature at page center with name in caps, Encl at left on the signature line, DISTRIBUTION and CF placement, SEE DISTRIBUTION over five addressees, page 1 unnumbered.
+
+NEEDS YOU
+- ZIP+4: AR 25-50 para 1-35 requires the nine-digit ZIP on letterhead. The new hospital's letterhead reads "FORT LEONARD WOOD, MO 65473". I could not find the +4 for 4234 Illinois Avenue. Also confirm "#351".
+- Counseling memo: AR 25-50 has no counseling format (DA Form 4856 is the standard). It is kept as a memorandum for record on letterhead, same as before.

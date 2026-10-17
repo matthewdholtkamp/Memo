@@ -91,20 +91,32 @@ d) On load: if parameter memoId is set, load that ArmyMemoDraft and parse specJs
 e) Privacy bar text: "Drafts save to Vantage under your account permissions." Keep the "Clear saved draft" button (clears the local autosave only).
 f) "New memo" also clears memoId (emit memoSaved with "").
 g) CAC signing guide steps become: 1. Generate and review the unsigned PDF. 2. Complete the official date after signature coordination. 3. Open the PDF in Adobe Acrobat. 4. Place the CAC-secured digital signature field above the typed signature block. 5. Follow your organization's records-management and release procedures. Notice box text stays: "ArmyMemo prepares an unsigned formatting aid. It does not apply, validate, or replace a CAC-secured signature."
-h) Structural preview helper text: "Final spacing and pagination are set in the generated PDF." Expanded preview subtitle: "PDF layout approximation".
+h) Structural preview helper text: "Final spacing and pagination are set in the generated PDF." Expanded preview subtitle: "PDF layout approximation". Make the preview follow the same AR 25-50 rules as the PDF: no letterhead or seal for type "mfr"; no paragraph number when there is only one top-level paragraph; "SUBJECT: " with one space; for multiple addressees show "MEMORANDUM FOR" on its own line with each address below it.
 i) The Ask Dr. Holtkamp drawer, header button (gold pill with ✦✦✦), message cards, chips, warnings, questions, undo — identical. It calls askArmyMemoAssistant through OSDK.
 
 3.6 Seal: the letterhead seal is army-seal.png (163 x 163 px). I will upload it into the ArmyMemo folder (or give it to you in context). Place it in the repo at src/assets/army-seal.png and import it inline (Vite: import sealDataUrl from "./assets/army-seal.png?inline"). In profiles.ts, set sealImageDataUrl for both built-in profiles to that data URL so buildPdf and the preview always have it; never fetch it at runtime. If you cannot get the PNG into the repo, ship without it and add a small "Upload seal" button in Memo setup (PNG/JPEG, 2 MB max, stored in the draft spec as a data URL, same rules as Appendix seals logic below) and tell me.
    Seals logic to keep: PNG or JPEG only; max 2 MB; error messages "Seal images must be PNG or JPEG files." / "Seal images must be 2 MB or smaller."
 
-3.7 PDF rules (already implemented in Appendix G — do not "improve" them): Letter size, 1 in margins; letterhead 10 pt bold centered from 0.5 in with the seal 1 in square at 0.5 in from the top-left page corner; first page has no page number; continuation pages show office symbol (with ARIMS in parentheses when present) and "SUBJECT:  ..." at 0.5 in, and a centered page number in the footer; suspense bold and flush right; office symbol left and date right on one line; block-style numbering 1. a. (1) (a) 1) a) with 0.25 in first-line indents and runover returning to the left margin; two spaces after sentences preserved; ragged right; paragraphs kept together when they fit; signature block starts at page center (3.25 in from the left margin); enclosures listed at the left margin level with the signature block; DISTRIBUTION, CF, and the counseling ACKNOWLEDGMENT after the closing; fonts Arial -> Helvetica, Times New Roman -> Times-Roman (metric-identical PDF standard fonts, nothing embedded); unsupported characters print as "?". Filename is the subject only, no date.
+3.7 PDF rules — AR 25-50 (10 October 2020, administrative revision 4 October 2024), already implemented and tested in Appendix G. Do not "improve" or change them:
+- Letter size; 1 in left, right and bottom margins; ragged right; Arial 12 -> Helvetica, Times New Roman 12 -> Times-Roman (metric-identical PDF standard fonts); single-spaced lines of 13.8 pt; one blank line between paragraphs and subparagraphs.
+- Letterhead (page 1 only): 1 in seal at 0.5 in from the top and left edges. Army style (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black, centered. DHA style (DHA letterhead): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, navy, centered. Style comes from letterhead.letterheadStyle.
+- Office symbol on the second line below the seal, with the ARIMS number one space after it in parentheses; date flush right on the same line. Suspense "S: date" bold, flush right, two lines above the date line.
+- MEMORANDUM FOR on the third line below the office symbol. One address: same line, runover flush left. Two to five addresses: "MEMORANDUM FOR" alone, blank line, each address on its own line with runover indented 1/4 in. More than five or a distribution list: "MEMORANDUM FOR SEE DISTRIBUTION". One THRU: "MEMORANDUM THRU address", blank line, "FOR address". Two or more THRU: "MEMORANDUM THRU" alone, blank line, the THRU addresses, blank line, "FOR ...". MFR and counseling: "MEMORANDUM FOR RECORD" (THRU ignored).
+- "SUBJECT: " with ONE space after the colon (para 1-39b(9)), second line below the last address line, runover flush left. Text begins on the third line below the subject.
+- Numbering 1., a., (1), (a) — four levels maximum. First-line indents 0, 1/4 in, 1/2 in, 1/2 in ((a) is not indented further than (1)); runover returns to the left margin; two spaces after the label and after sentence-ending periods and question marks. A one-paragraph memorandum is not numbered (its subparagraphs still are).
+- Authority line in capitals on the second line below the text. Signature block at the center of the page on the fifth line below the authority line (or below the text): NAME IN CAPITALS, rank and branch (omitted for civilians), title; a title runover is indented 1/4 in. Enclosures at the left margin on the same line as the signature block: one = "Encl" then its description; more than one = "N Encls" then "1. ..." with runover aligned under the text. DISTRIBUTION:, then CF:, each on the second line below whatever is lowest above it. Counseling ACKNOWLEDGMENT section after that.
+- MFR: plain paper, no letterhead; office symbol 1 in from the top; never an authority line.
+- Continuation pages: no letterhead; office symbol 1 in from the top edge; "SUBJECT: ..." on the next line; text resumes on the third line below the subject; page number centered about 1 in from the bottom. Page 1 is never numbered.
+- Page breaks: a paragraph of three lines or fewer is never divided; a divided paragraph keeps at least two lines on each page; a divided sentence keeps at least two words on each page; no hyphenation; the authority line and signature block never go to a page without at least two lines of the last paragraph (a one-line last paragraph may go with them).
+- Unsupported characters print as "?". Filename is the subject only, no date.
 
 3.8 Make it fill the Workshop widget area responsively (min height 100% of the iframe). Keep the three-column workspace at desktop widths; the existing CSS already has responsive rules.
 
 3.9 Tests: add vitest (or the repo's existing test runner) and port these checks against the synthetic fixtures in Appendix N:
 - validateMemo: missing subject blocks generation; lone subparagraph blocks generation; blank ARIMS is only a warning; single-space sentences raise the spacing warning.
 - blocks: flatten/blocksToParagraphs round-trip; numberLabel gives 1., a., (1), (a), 1), a).
-- buildPdf: each fixture produces a valid PDF (starts with %PDF); the "complex" fixture is 2 pages; page 1 contains the letterhead text and not a page number; page 2 contains "SUBJECT:  Heat Illness Prevention" and "2".
+- validateMemo: a paragraph nested below (a) blocks generation; an authority line on an MFR blocks generation.
+- buildPdf: each fixture produces a valid PDF (starts with %PDF); the "complex" fixture is 2 pages; its page 1 contains the letterhead text and no page number; its page 2 contains "SUBJECT: Heat Illness Prevention" (one space) and "2"; the "single" fixture contains no "1." label; the "mfr" fixture contains no letterhead text.
 - assistant apply: a patch with type "counseling" adds the default acknowledgment; paragraphs patch replaces the body.
 CI must pass before you publish.
 
@@ -121,8 +133,8 @@ If you cannot create or edit Workshop modules directly, give me numbered click-b
 PHASE 5 — VERIFY AND REPORT
 Run, in dev mode in the Workshop module:
 1. Load example -> Generate PDF. Confirm download, page 1 letterhead and seal, no page number, signature at page center.
-2. Build the "complex" fixture by hand or via Load draft JSON. Confirm 2 pages, continuation header, page number 2, suspense, THRU lines, enclosures beside the signature block, CF list.
-3. Counseling type: MEMORANDUM FOR RECORD and ACKNOWLEDGMENT section.
+2. Build the "complex" fixture by hand or via Load draft JSON. Confirm 2 pages, continuation header 1 in from the top, page number 2, suspense two lines above the date, MEMORANDUM THRU / FOR lines, "2 Encls" beside the signature block, CF list.
+3. Counseling type: MEMORANDUM FOR RECORD and ACKNOWLEDGMENT section. MFR type: no letterhead, office symbol 1 in from the top.
 4. Save to Vantage, reload the module, reopen from My Drafts — same content.
 5. Ask Dr. Holtkamp: "Turn this into an MFR about moving the clinic huddle to 0730 Tuesdays." Confirm fields update and Undo works.
 6. Compliance panel: clear the subject — Generate PDF disables and the item navigates to the Subject field.
@@ -130,7 +142,7 @@ Final report to me (short): links to the folder, Workshop module, widget set, ob
 
 GUARDRAILS
 - No external network calls from the widget. No telemetry.
-- Do not change the numbering, validation rules, assistant prompt, or PDF layout.
+- Do not change the numbering, validation rules, assistant prompt, or PDF layout. They were checked line by line against AR 25-50.
 - Do not add features (no MOU/MOA, no e-signature, no auto-routing).
 - Treat this app as an unsigned formatting aid; it never signs anything.
 - Keep everything inside the ArmyMemo folder.
@@ -514,7 +526,7 @@ export const INDENT_STEP = 360;
 export const SIGNATURE_LEFT = 4680;
 export const SINGLE_LINE = 240;
 export const PARAGRAPH_AFTER = 200;
-export const MAX_NUMBERING_DEPTH = 5;
+export const MAX_NUMBERING_DEPTH = 3;
 
 export function paragraphLabel(depth: number, ordinal: number): string {
   const letter = String.fromCharCode(96 + Math.min(ordinal, 26));
@@ -554,7 +566,7 @@ const DATE_PATTERN =
 const SENTENCE_SPACING_PATTERN = /[.?] (?=\S)/;
 const ACRONYM_PATTERN = /\b[A-Z][A-Z0-9-]{1,}\b/g;
 const EXPANDED_ACRONYM_PATTERN = /\(([A-Z][A-Z0-9-]{1,})\)/g;
-const MAX_DEPTH = 5;
+const MAX_DEPTH = 3; // AR 25-50 fig 2-1: 1., a., (1), (a); do not subdivide beyond the third subdivision
 const COMPLIANCE_TARGETS: Record<
   string,
   { stage: MemoStage; focusTarget?: string }
@@ -567,6 +579,9 @@ const COMPLIANCE_TARGETS: Record<
   signature: { stage: "closing", focusTarget: "signature-name" },
   "lone-child": { stage: "body", focusTarget: "body-blocks" },
   nesting: { stage: "body", focusTarget: "body-blocks" },
+  "mfr-authority": { stage: "closing", focusTarget: "signature-name" },
+  "mfr-thru": { stage: "closing" },
+  "thru-count": { stage: "closing" },
   "right-margin": { stage: "body", focusTarget: "body-blocks" },
   "paragraph-length": { stage: "body", focusTarget: "body-blocks" },
   "sentence-spacing": { stage: "body", focusTarget: "sentence-spacing-tool" },
@@ -690,7 +705,22 @@ export function validateMemo(spec: MemoSpec): ValidationResult {
   );
   if (hasDeepNesting) {
     items.push(
-      item("nesting", "Paragraph nesting too deep", "fail", "Use no more than six numbering levels.")
+      item("nesting", "Paragraph nesting too deep", "fail", "AR 25-50 allows four levels: 1., a., (1), (a). Do not subdivide further.")
+    );
+  }
+  if (spec.type === "mfr" && spec.authorityLine?.trim()) {
+    items.push(
+      item("mfr-authority", "No authority line on an MFR", "fail", "AR 25-50 fig 2-17: do not use an authority line on a memorandum for record. Turn off the authority line.")
+    );
+  }
+  if (spec.type !== "memo" && trimmed(spec.thru).length > 0) {
+    items.push(
+      item("mfr-thru", "THRU not used on an MFR", "warn", "A memorandum for record has no THRU or FOR lines; THRU entries are left off the document.")
+    );
+  }
+  if (spec.type === "memo" && trimmed(spec.thru).length > 2) {
+    items.push(
+      item("thru-count", "More than two THRU addressees", "warn", "AR 25-50 fig 2-12: do not use more than two THRU addressees unless absolutely necessary.")
     );
   }
   items.push(
@@ -757,48 +787,66 @@ export function fixSentenceSpacing(spec: MemoSpec): MemoSpec {
 }
 ----- END APPENDIX F -----
 
------ APPENDIX G: src/generator/buildPdf.ts (NEW — tested; use as written) -----
-// ArmyMemo PDF engine (pdf-lib). Port of buildDocx.ts: same layout, page by page, in points.
-// Letter page 612 x 792 pt, 1 in margins, letterhead header at 0.5 in, continuation header/footer.
-import { PDFDocument, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+----- APPENDIX G: src/generator/buildPdf.ts (NEW — tested against AR 25-50; use as written) -----
+// ArmyMemo PDF engine (pdf-lib), built to AR 25-50 (10 Oct 2020, admin revision 4 Oct 2024),
+// chapter 2, figures 2-1 through 2-17, chapter 4 (enclosures) and paragraph 6-4 (signature block).
+// Letterhead geometry is measured from the APD letterhead template as it prints on real
+// signed memorandums. All positions are PDF points from the TOP of the page (72 pt = 1 inch).
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFImage,
+  type PDFPage,
+  type RGB
+} from "pdf-lib";
 import type { MemoSpec, ParagraphNode } from "../model/memoSpec";
 import { validateMemo } from "../validation/validate";
 import { paragraphLabel } from "./format";
 
 const PAGE_W = 612;
 const PAGE_H = 792;
-const MARGIN = 72;
-const HEADER_TOP = 36; // 0.5 in header distance
-const FOOTER_BOTTOM = 36; // 0.5 in footer distance
-const CONTENT_W = PAGE_W - 2 * MARGIN; // 468
-const RIGHT = PAGE_W - MARGIN; // 540
-const INDENT = 18; // 0.25 in
-const SIG_X = MARGIN + 234; // 3.25 in from margin = page center
+const MARGIN = 72; // 1 inch left, right, bottom; continuation pages start 1 inch from the top
+const RIGHT = PAGE_W - MARGIN;
+const CONTENT_W = RIGHT - MARGIN; // 468
 const BODY_SIZE = 12;
-const LETTERHEAD_SIZE = 10;
-const LINE_FACTOR = 1.15; // Word single spacing for Arial / Times New Roman
-const ASCENT_FACTOR = 0.905;
-const PARA_AFTER = 10; // 200 twips
-const SEAL_X = 36;
+const LH = 13.8; // one single-spaced line of 12-point Arial or Times New Roman
+const BASELINE = 10.9; // distance from a line's top to its baseline
+const INDENT = 18; // 1/4 inch
+const SIG_X = PAGE_W / 2; // signature block begins at the center of the page
+const ENCL_W = SIG_X - MARGIN - 12; // enclosure column, left of the signature block
+const BODY_BOTTOM = PAGE_H - MARGIN; // 1-inch bottom margin
+const PAGE_NUMBER_TOP = BODY_BOTTOM; // centered, approximately 1 inch from the bottom
+const SEAL_X = 36; // seal: 1 inch, 1/2 inch from the left and top edges
 const SEAL_TOP = 36;
-const SEAL_SIZE = 72; // 1 in
-const BODY_BOTTOM = PAGE_H - MARGIN; // 720
+const SEAL_SIZE = 72;
+const OFFICE_TOP_LETTERHEAD = SEAL_TOP + SEAL_SIZE + 2 * LH; // office symbol: second line below the seal
+const NAVY = rgb(0, 0, 0.5);
+const BLACK = rgb(0, 0, 0);
+// Subparagraph first-line indent by level: 1. at the margin, a. 1/4 in, (1) 1/2 in, (a) 1/2 in
+// ("Do not indent any further than the second subdivision" - fig 2-1).
+const LEVEL_INDENT = [0, INDENT, 2 * INDENT, 2 * INDENT];
 
-type Fonts = { regular: PDFFont; bold: PDFFont };
-type Line = { text: string; x: number; width: number; bold?: boolean; align?: "left" | "right" | "center"; size?: number };
-// A block is a set of lines laid out top-down; `keep` blocks never split across pages.
-// `reserve` is extra height (e.g. the signature block) that must land on the same page as this block.
-type Block = { lines: Line[]; after: number; keep: boolean; keepWithNext?: boolean; columns?: Line[][]; reserve?: number };
-
-const lineHeight = (size: number) => size * LINE_FACTOR;
+type Fonts = { regular: PDFFont; bold: PDFFont; lhBold: PDFFont; lhRegular: PDFFont };
+type Seg = { text: string; x: number; width: number; bold?: boolean; align?: "left" | "right" | "center" };
+type Row = Seg[];
+type Block = {
+  rows: Row[];
+  gap: number; // blank lines before the block (dropped at the top of a continuation page)
+  splittable?: boolean; // body paragraphs of 4+ lines may split, 2+ lines on each page
+  keepWithNext?: boolean; // keep with the first line of the next block
+  lastBody?: boolean; // last body paragraph: carries 2+ lines onto the closing's page
+  closing?: boolean;
+};
 
 function makeSanitizer(font: PDFFont) {
   const cache = new Map<string, boolean>();
-  const replacements: Record<string, string> = { "‑": "-", " ": " ", " ": " ", "​": "" };
+  const swaps: Record<string, string> = { "‑": "-", " ": " ", " ": " ", "​": "" };
   return (text: string): string =>
     Array.from(text)
       .map((ch) => {
-        if (replacements[ch] !== undefined) return replacements[ch];
+        if (swaps[ch] !== undefined) return swaps[ch];
         if (!cache.has(ch)) {
           try {
             font.encodeText(ch);
@@ -812,7 +860,7 @@ function makeSanitizer(font: PDFFont) {
       .join("");
 }
 
-// Wrap preserving interior double spaces (AR 25-50 two spaces after sentences).
+// Word wrap that keeps interior double spaces (two spaces after periods and question marks).
 function wrap(text: string, font: PDFFont, size: number, firstWidth: number, restWidth: number): string[] {
   const tokens = text.replace(/\t/g, " ").match(/\S+|\s+/g) ?? [""];
   const lines: string[] = [];
@@ -824,9 +872,8 @@ function wrap(text: string, font: PDFFont, size: number, firstWidth: number, res
       if (current) current += token;
       continue;
     }
-    const candidate = current + token;
-    if (fits(candidate)) {
-      current = candidate;
+    if (fits(current + token)) {
+      current += token;
       continue;
     }
     if (current.trim()) {
@@ -846,133 +893,29 @@ function wrap(text: string, font: PDFFont, size: number, firstWidth: number, res
   return lines;
 }
 
-class Layout {
-  doc: PDFDocument;
-  fonts: Fonts;
-  spec: MemoSpec;
-  pages: PDFPage[] = [];
-  y = 0; // distance from top of page
-  firstBodyTop: number;
-  contBodyTop: number;
-  clean: (text: string) => string;
-
-  constructor(doc: PDFDocument, fonts: Fonts, spec: MemoSpec, firstBodyTop: number, contBodyTop: number) {
-    this.doc = doc;
-    this.fonts = fonts;
-    this.spec = spec;
-    this.firstBodyTop = firstBodyTop;
-    this.contBodyTop = contBodyTop;
-    this.clean = makeSanitizer(fonts.regular);
-    this.newPage();
-  }
-
-  newPage() {
-    this.pages.push(this.doc.addPage([PAGE_W, PAGE_H]));
-    this.y = this.pages.length === 1 ? this.firstBodyTop : this.contBodyTop;
-  }
-
-  get page() {
-    return this.pages[this.pages.length - 1];
-  }
-
-  drawLine(page: PDFPage, line: Line, top: number) {
-    const size = line.size ?? BODY_SIZE;
-    const font = line.bold ? this.fonts.bold : this.fonts.regular;
-    const text = this.clean(line.text);
-    if (!text) return;
-    const w = font.widthOfTextAtSize(text, size);
-    const x = line.align === "right" ? line.x + line.width - w : line.align === "center" ? line.x + (line.width - w) / 2 : line.x;
-    page.drawText(text, { x, y: PAGE_H - top - size * ASCENT_FACTOR, size, font });
-  }
-
-  blank(count = 1) {
-    for (let i = 0; i < count; i += 1) {
-      if (this.y + lineHeight(BODY_SIZE) > BODY_BOTTOM + 0.01) this.newPage();
-      else this.y += lineHeight(BODY_SIZE);
-    }
-  }
-
-  blockHeight(block: Block): number {
-    if (block.columns) return Math.max(...block.columns.map((col) => col.length)) * lineHeight(BODY_SIZE);
-    return block.lines.length * lineHeight(BODY_SIZE);
-  }
-
-  place(block: Block, next?: Block) {
-    const lh = lineHeight(BODY_SIZE);
-    const room = () => BODY_BOTTOM - this.y + 0.01;
-    const height = this.blockHeight(block);
-    const groupHeight =
-      block.keepWithNext && next
-        ? height + block.after + this.blockHeight(next)
-        : block.reserve
-          ? height + block.after + block.reserve
-          : height;
-    const pageCapacity = BODY_BOTTOM - this.contBodyTop;
-
-    if (block.columns) {
-      if (height > room() && height <= pageCapacity) this.newPage();
-      const top = this.y;
-      block.columns.forEach((col) => col.forEach((line, i) => this.drawLine(this.page, line, top + i * lh)));
-      this.y = top + height + block.after;
-      return;
-    }
-
-    if ((block.keep || block.keepWithNext) && groupHeight > room() && groupHeight <= pageCapacity) {
-      this.newPage();
-    }
-    // Split with widow/orphan control (at least 2 lines on each side) when the block cannot fit.
-    let index = 0;
-    while (index < block.lines.length) {
-      const fitCount = Math.floor(room() / lh);
-      const remaining = block.lines.length - index;
-      if (fitCount >= remaining) {
-        block.lines.slice(index).forEach((line, i) => this.drawLine(this.page, line, this.y + i * lh));
-        this.y += remaining * lh;
-        index = block.lines.length;
-        break;
-      }
-      let take = fitCount;
-      if (remaining - take < 2) take = remaining - 2;
-      if (take < 2) {
-        this.newPage();
-        continue;
-      }
-      block.lines.slice(index, index + take).forEach((line, i) => this.drawLine(this.page, line, this.y + i * lh));
-      index += take;
-      this.newPage();
-    }
-    this.y = Math.min(this.y + block.after, BODY_BOTTOM);
-  }
-
-  text(text: string, opts: { x?: number; width?: number; firstIndent?: number; bold?: boolean; align?: Line["align"] } = {}): Line[] {
-    const x = opts.x ?? MARGIN;
-    const width = opts.width ?? RIGHT - x;
-    const first = opts.firstIndent ?? 0;
-    const font = opts.bold ? this.fonts.bold : this.fonts.regular;
-    return wrap(this.clean(text), font, BODY_SIZE, width - first, width).map((value, i) => ({
-      text: value,
-      x: i === 0 ? x + first : x,
-      width: i === 0 ? width - first : width,
-      bold: opts.bold,
-      align: opts.align
-    }));
-  }
-}
+const trimmedList = (values: string[]) => values.map((v) => v.trim()).filter(Boolean);
 
 function fullOfficeSymbol(spec: MemoSpec): string {
   const arims = spec.arimsRecordNumber.trim();
   return arims ? `${spec.officeSymbol.trim()} (${arims})` : spec.officeSymbol.trim();
 }
 
-function trimmedList(values: string[]): string[] {
-  return values.map((v) => v.trim()).filter(Boolean);
-}
-
 function dataUrlBytes(dataUrl: string): { bytes: Uint8Array; type: "png" | "jpg" } | null {
   const match = dataUrl.match(/^data:image\/(png|jpe?g);base64,(.+)$/);
   if (!match) return null;
-  const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-  return { bytes, type: match[1] === "png" ? "png" : "jpg" };
+  return { bytes: Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0)), type: match[1] === "png" ? "png" : "jpg" };
+}
+
+// 2-5c(2): at least two words of a divided sentence on each page.
+function sentenceSplitOk(lastOnPage: string, firstOnNext: string): boolean {
+  const before = lastOnPage.trimEnd();
+  if (!/[.?!]["')\]]?$/.test(before)) {
+    const tail = before.split(/(?<=[.?!]["')\]]?)\s+/).pop() ?? "";
+    if (tail.trim().split(/\s+/).filter(Boolean).length < 2) return false;
+  }
+  const head = firstOnNext.trimStart().match(/^(.*?[.?!]["')\]]?)(\s|$)/);
+  if (head && head[1].split(/\s+/).filter(Boolean).length < 2) return false;
+  return true;
 }
 
 export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
@@ -982,143 +925,295 @@ export async function buildPdf(spec: MemoSpec): Promise<Uint8Array> {
   }
 
   const doc = await PDFDocument.create();
-  const fonts: Fonts =
-    spec.font === "Times New Roman"
-      ? { regular: await doc.embedFont(StandardFonts.TimesRoman), bold: await doc.embedFont(StandardFonts.TimesRomanBold) }
-      : { regular: await doc.embedFont(StandardFonts.Helvetica), bold: await doc.embedFont(StandardFonts.HelveticaBold) };
+  const times = spec.font === "Times New Roman";
+  const dhaStyle = spec.letterhead.letterheadStyle === "dha";
+  const fonts: Fonts = {
+    regular: await doc.embedFont(times ? StandardFonts.TimesRoman : StandardFonts.Helvetica),
+    bold: await doc.embedFont(times ? StandardFonts.TimesRomanBold : StandardFonts.HelveticaBold),
+    lhBold: await doc.embedFont(dhaStyle ? StandardFonts.TimesRomanBold : StandardFonts.HelveticaBold),
+    lhRegular: await doc.embedFont(dhaStyle ? StandardFonts.TimesRoman : StandardFonts.HelveticaBold)
+  };
   const clean = makeSanitizer(fonts.regular);
+  const isRecord = spec.type === "mfr" || spec.type === "counseling";
+  // Figure 2-17: a memorandum for record is typed on plain white paper (no letterhead).
+  const useLetterhead = spec.type !== "mfr";
 
-  // Letterhead lines (10 pt bold, centered); body starts below whichever is lower: margin or header.
-  const lhLines = spec.letterhead.orgLines
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .flatMap((line) => wrap(clean(line), fonts.bold, LETTERHEAD_SIZE, CONTENT_W, CONTENT_W));
-  const letterheadBottom = HEADER_TOP + lhLines.length * lineHeight(LETTERHEAD_SIZE);
-  const subjectHeader = wrap(clean(`SUBJECT:  ${spec.subject.trim()}`), fonts.regular, BODY_SIZE, CONTENT_W, CONTENT_W);
-  const contHeaderBottom = HEADER_TOP + (1 + subjectHeader.length) * lineHeight(BODY_SIZE);
-
-  const L = new Layout(doc, fonts, spec, Math.max(MARGIN, letterheadBottom), Math.max(MARGIN, contHeaderBottom));
-  const lh = lineHeight(BODY_SIZE);
-  const blocks: Block[] = [];
-  const push = (lines: Line[], after = 0, keep = false, keepWithNext = false) => blocks.push({ lines, after, keep, keepWithNext });
-  const blankBlock = (n = 1) => {
-    for (let i = 0; i < n; i += 1) blocks.push({ lines: [{ text: "", x: MARGIN, width: CONTENT_W }], after: 0, keep: false });
+  // Text -> rows. firstIndent applies to the first line only; runIndent to every runover line.
+  const text = (
+    value: string,
+    o: { x?: number; width?: number; firstIndent?: number; runIndent?: number; bold?: boolean; align?: Seg["align"] } = {}
+  ): Row[] => {
+    const x = o.x ?? MARGIN;
+    const width = o.width ?? RIGHT - x;
+    const first = o.firstIndent ?? 0;
+    const run = o.runIndent ?? 0;
+    const font = o.bold ? fonts.bold : fonts.regular;
+    return wrap(clean(value), font, BODY_SIZE, width - first, width - run).map((line, i) => [
+      { text: line, x: x + (i === 0 ? first : run), width: width - (i === 0 ? first : run), bold: o.bold, align: o.align }
+    ]);
   };
 
-  // ---- Heading ----
-  blankBlock(3);
+  // ---------------- Page 1 heading (absolute positions) ----------------
+  let officeTop = useLetterhead ? OFFICE_TOP_LETTERHEAD : MARGIN;
+  let suspenseTop: number | null = null;
   if (spec.suspense?.trim()) {
-    push(L.text(`S: ${spec.suspense.trim()}`, { bold: true, align: "right" }));
-    blankBlock(1);
+    // Suspense: flush right, bold, two lines above the date line.
+    suspenseTop = officeTop - 2 * LH;
+    if (suspenseTop < MARGIN) {
+      suspenseTop = MARGIN;
+      officeTop = MARGIN + 2 * LH;
+    }
   }
-  const half = CONTENT_W / 2;
-  blocks.push({
-    lines: [],
-    after: 0,
-    keep: true,
-    columns: [
-      L.text(fullOfficeSymbol(spec), { x: MARGIN, width: half }),
-      L.text(spec.date.trim() || "[DATE]", { x: MARGIN + half, width: half, align: "right" })
-    ]
-  });
-  blankBlock(2);
-  trimmedList(spec.thru).forEach((recipient, i) => push(L.text(i === 0 ? `MEMORANDUM THRU ${recipient}` : `THRU ${recipient}`)));
-  const addressees = trimmedList(spec.addressees);
-  const useDistribution = trimmedList(spec.distribution).length > 0 || addressees.length > 5;
-  if (spec.type === "mfr" || spec.type === "counseling") {
-    push(L.text("MEMORANDUM FOR RECORD"));
-  } else {
-    push(L.text(useDistribution ? "MEMORANDUM FOR SEE DISTRIBUTION" : `MEMORANDUM FOR ${addressees[0] ?? ""}`));
-    if (!useDistribution) addressees.slice(1).forEach((recipient) => push(L.text(recipient, { firstIndent: INDENT })));
-  }
-  blankBlock(1);
-  push(L.text(`SUBJECT:  ${spec.subject.trim()}`));
-  blankBlock(2);
+  const dateText = clean(spec.date.trim() || "[DATE]");
+  const dateWidth = fonts.regular.widthOfTextAtSize(dateText, BODY_SIZE);
+  const officeRows = text(fullOfficeSymbol(spec), { width: CONTENT_W - dateWidth - 24 });
+  officeRows[0].push({ text: dateText, x: MARGIN, width: CONTENT_W, align: "right" });
 
-  // ---- Body (numbered, block style: runover returns to left margin) ----
-  const appendBody = (nodes: ParagraphNode[], depth = 0) => {
+  // ---------------- Flowing blocks ----------------
+  const blocks: Block[] = [];
+  const addressees = trimmedList(spec.addressees);
+  const distribution = trimmedList(spec.distribution).length ? trimmedList(spec.distribution) : addressees.length > 5 ? addressees : [];
+  const seeDistribution = distribution.length > 0;
+  const addrList = (list: string[], gap: number) =>
+    list.forEach((addr, i) => blocks.push({ rows: text(addr, { runIndent: INDENT }), gap: i === 0 ? gap : 0 }));
+
+  if (isRecord) {
+    blocks.push({ rows: text("MEMORANDUM FOR RECORD"), gap: 2 });
+  } else {
+    const thru = trimmedList(spec.thru);
+    const forTarget = seeDistribution ? ["SEE DISTRIBUTION"] : addressees;
+    if (thru.length === 1) {
+      // Fig 2-11: MEMORANDUM THRU and the address on one line; runover flush left.
+      blocks.push({ rows: text(`MEMORANDUM THRU ${thru[0]}`), gap: 2 });
+    } else if (thru.length > 1) {
+      // Fig 2-12: MEMORANDUM THRU alone, then each address; runover indented 1/4 inch.
+      blocks.push({ rows: text("MEMORANDUM THRU"), gap: 2 });
+      addrList(thru, 1);
+    }
+    const lead = thru.length ? "FOR" : "MEMORANDUM FOR";
+    const leadGap = thru.length ? 1 : 2;
+    if (forTarget.length <= 1) {
+      // Single address: on the same line; runover flush with the left margin.
+      blocks.push({ rows: text(`${lead} ${forTarget[0] ?? ""}`.trimEnd()), gap: leadGap });
+    } else {
+      // Multiple-address (2 to 5): each address on its own line, runover indented 1/4 inch (figs 2-5, 2-7).
+      blocks.push({ rows: text(lead), gap: leadGap });
+      addrList(forTarget, 1);
+    }
+  }
+  // SUBJECT: one space after the colon (para 1-39b(9), fig 2-17).
+  blocks.push({ rows: text(`SUBJECT: ${spec.subject.trim()}`), gap: 1 });
+
+  // Body. A one-paragraph memorandum is not numbered (fig 2-13); its subparagraphs still are.
+  const single = spec.paragraphs.length === 1;
+  const bodyStart = blocks.length;
+  const appendBody = (nodes: ParagraphNode[], depth: number) => {
     nodes.forEach((node, index) => {
-      push(L.text(`${paragraphLabel(depth, index + 1)}  ${node.text.trim()}`, { firstIndent: depth * INDENT }), PARA_AFTER, true);
+      const numbered = !(single && depth === 0);
+      const label = numbered ? `${paragraphLabel(depth, index + 1)}  ` : "";
+      const rows = text(`${label}${node.text.trim()}`, { firstIndent: numbered ? LEVEL_INDENT[Math.min(depth, 3)] : 0 });
+      blocks.push({ rows, gap: blocks.length === bodyStart ? 2 : 1, splittable: rows.length > 3 });
       appendBody(node.children, depth + 1);
     });
   };
-  appendBody(spec.paragraphs);
+  appendBody(spec.paragraphs, 0);
+  blocks[blocks.length - 1].lastBody = true;
 
-  // ---- Closing ----
-  const sigLines = (x: number): Line[] => {
-    const width = RIGHT - x;
-    const lines: Line[] = [...L.text(spec.signature.name.trim().toUpperCase(), { x, width })];
-    if (!spec.signature.civilian) lines.push(...L.text(spec.signature.rankBranch.trim(), { x, width }));
-    trimmedList(spec.signature.title).forEach((title, i) => lines.push(...L.text(title, { x: x + (i === 0 ? 0 : INDENT), width: width - (i === 0 ? 0 : INDENT) })));
-    return lines;
-  };
-  const authority = spec.authorityLine?.trim();
-  if (authority) {
-    blankBlock(1);
-    // Authority line, the four blank signature lines, and the signature block stay together.
-    const encl = trimmedList(spec.enclosures);
-    const closingLines = Math.max(sigLines(SIG_X).length, encl.length ? encl.length + 1 : 0);
-    blocks.push({ lines: L.text(authority.toUpperCase()), after: 4 * lh, keep: true, reserve: closingLines * lh });
-  } else {
-    blankBlock(4);
-  }
+  // Closing: authority line (2nd line below text), signature block (5th line below the authority
+  // line or text) at page center, enclosure listing at the left margin on the same line.
+  const sig: Row[] = [];
+  const sigText = (value: string, indent = 0) => text(value, { x: SIG_X + indent, runIndent: indent ? 0 : INDENT });
+  sig.push(...sigText(spec.signature.name.trim().toUpperCase()));
+  if (!spec.signature.civilian) sig.push(...sigText(spec.signature.rankBranch.trim()));
+  // Title runover (a long title) continues on the next line indented 1/4 inch (para 6-4c).
+  trimmedList(spec.signature.title).forEach((title, i) => sig.push(...(i === 0 ? sigText(title) : sigText(title, INDENT))));
   const enclosures = trimmedList(spec.enclosures);
-  if (enclosures.length === 0) {
-    push(sigLines(SIG_X), 0, true);
-  } else {
-    const left: Line[] =
-      enclosures.length === 1
-        ? [...L.text("Encl", { width: 234 - 6 }), ...L.text(enclosures[0], { width: 234 - 6 })]
-        : [...L.text("Encls", { width: 234 - 6 }), ...enclosures.flatMap((e, i) => L.text(`${i + 1}. ${e}`, { width: 234 - 6 }))];
-    blocks.push({ lines: [], after: 0, keep: true, columns: [left, sigLines(SIG_X)] });
+  const encl: Row[] = [];
+  if (enclosures.length === 1) {
+    encl.push(...text("Encl", { width: ENCL_W }), ...text(enclosures[0], { width: ENCL_W }));
+  } else if (enclosures.length > 1) {
+    encl.push(...text(`${enclosures.length} Encls`, { width: ENCL_W }));
+    enclosures.forEach((e, i) => {
+      const label = `${i + 1}. `;
+      const hang = fonts.regular.widthOfTextAtSize(label, BODY_SIZE);
+      encl.push(...text(`${label}${e}`, { width: ENCL_W, runIndent: hang }));
+    });
   }
+  const closingRows: Row[] = [];
+  const authority = spec.type === "mfr" ? "" : spec.authorityLine?.trim() ?? "";
+  if (authority) {
+    closingRows.push(...text(authority.toUpperCase()));
+    for (let i = 0; i < 4; i += 1) closingRows.push([]);
+  }
+  for (let i = 0; i < Math.max(sig.length, encl.length); i += 1) closingRows.push([...(encl[i] ?? []), ...(sig[i] ?? [])]);
+  blocks.push({ rows: closingRows, gap: authority ? 1 : 4, closing: true });
 
-  // ---- Post-closing ----
-  const cf = trimmedList(spec.cfRecipients);
-  const distribution = trimmedList(spec.distribution).length ? trimmedList(spec.distribution) : addressees.length > 5 ? addressees : [];
   if (distribution.length) {
-    blankBlock(1);
-    push(L.text("DISTRIBUTION:"), 0, false, true);
-    distribution.forEach((r) => push(L.text(r)));
+    blocks.push({ rows: text("DISTRIBUTION:"), gap: 1, keepWithNext: true });
+    distribution.forEach((d) => blocks.push({ rows: text(d), gap: 0 }));
   }
+  const cf = trimmedList(spec.cfRecipients);
   if (cf.length) {
-    blankBlock(1);
-    push(L.text("CF:"), 0, false, true);
-    cf.forEach((r) => push(L.text(r)));
+    blocks.push({ rows: text("CF:"), gap: 1, keepWithNext: true });
+    cf.forEach((c) => blocks.push({ rows: text(c), gap: 0 }));
   }
   if (spec.type === "counseling" && spec.acknowledgment) {
-    blankBlock(1);
-    push(L.text("ACKNOWLEDGMENT"), PARA_AFTER, false, true);
-    push([...L.text(spec.acknowledgment.statement), ...spec.acknowledgment.signers.flatMap((s) => L.text(s.label))], 0, true);
+    const ack: Row[] = [...text("ACKNOWLEDGMENT"), [], ...text(spec.acknowledgment.statement)];
+    spec.acknowledgment.signers.forEach((s) => ack.push(...text(s.label)));
+    blocks.push({ rows: ack, gap: 1 });
   }
 
-  // ---- Place blocks ----
-  blocks.forEach((block, i) => {
-    const isBlank = block.lines.length === 1 && block.lines[0].text === "" && !block.columns;
-    if (isBlank) {
-      // Blank lines never start a continuation page.
-      if (L.y + lh > BODY_BOTTOM + 0.01) return;
-      L.y += lh;
-      return;
-    }
-    L.place(block, blocks[i + 1]);
-  });
+  // ---------------- Pagination ----------------
+  const contHeaderRows = [...text(fullOfficeSymbol(spec)), ...text(`SUBJECT: ${spec.subject.trim()}`)];
+  const contBodyTop = MARGIN + contHeaderRows.length * LH + 2 * LH; // text on the 3rd line below the subject
 
-  // ---- Headers and footers ----
-  const seal = spec.letterhead.sealImageDataUrl ? dataUrlBytes(spec.letterhead.sealImageDataUrl) : null;
-  let sealImage: PDFImage | null = null;
-  if (seal) sealImage = seal.type === "png" ? await doc.embedPng(seal.bytes) : await doc.embedJpg(seal.bytes);
-  L.pages.forEach((page, index) => {
-    if (index === 0) {
-      if (sealImage) page.drawImage(sealImage, { x: SEAL_X, y: PAGE_H - SEAL_TOP - SEAL_SIZE, width: SEAL_SIZE, height: SEAL_SIZE });
-      lhLines.forEach((text, i) =>
-        L.drawLine(page, { text, x: MARGIN, width: CONTENT_W, bold: true, align: "center", size: LETTERHEAD_SIZE }, HEADER_TOP + i * lineHeight(LETTERHEAD_SIZE))
-      );
-      return;
+  type Placed = { page: number; top: number; row: Row };
+  const placed: Placed[] = [];
+  let page = 0;
+  let y = officeTop + officeRows.length * LH;
+  let atPageTop = false;
+  const newPage = () => {
+    page += 1;
+    y = contBodyTop;
+    atPageTop = true;
+  };
+  const put = (rows: Row[]) => {
+    rows.forEach((row) => {
+      placed.push({ page, top: y, row });
+      y += LH;
+    });
+    atPageTop = false;
+  };
+  const room = () => Math.floor((BODY_BOTTOM - y + 0.01) / LH);
+  const gapOf = (b: Block) => (atPageTop ? 0 : b.gap);
+  const pageLines = Math.floor((BODY_BOTTOM - contBodyTop + 0.01) / LH);
+
+  // Split point for a paragraph: 2+ lines on each page and 2+ words of a divided sentence on each page.
+  const splitAt = (rows: Row[], avail: number, force: boolean): number => {
+    let take = Math.min(avail, rows.length - 2);
+    if (force) return take;
+    while (take >= 2 && !sentenceSplitOk(rows[take - 1][0]?.text ?? "", rows[take][0]?.text ?? "")) take -= 1;
+    return take;
+  };
+  const placeSplittable = (b: Block) => {
+    let rows = b.rows;
+    let gap = gapOf(b);
+    for (;;) {
+      const avail = room() - gap;
+      if (rows.length <= avail) {
+        y += gap * LH;
+        put(rows);
+        return;
+      }
+      const take = splitAt(rows, avail, atPageTop);
+      if (take < 2) {
+        if (atPageTop) {
+          put(rows); // cannot satisfy the rules on an empty page; place as is
+          return;
+        }
+        newPage();
+        gap = 0;
+        continue;
+      }
+      y += gap * LH;
+      put(rows.slice(0, take));
+      rows = rows.slice(take);
+      newPage();
+      gap = 0;
     }
-    L.drawLine(page, { text: fullOfficeSymbol(spec), x: MARGIN, width: CONTENT_W }, HEADER_TOP);
-    subjectHeader.forEach((text, i) => L.drawLine(page, { text, x: MARGIN, width: CONTENT_W }, HEADER_TOP + (i + 1) * lh));
-    L.drawLine(page, { text: String(index + 1), x: MARGIN, width: CONTENT_W, align: "center" }, PAGE_H - FOOTER_BOTTOM - lh);
+  };
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const b = blocks[i];
+    const next = blocks[i + 1];
+    if (b.lastBody && next?.closing) {
+      // 2-5c(4): the authority line and signature block never go to a continuation page without
+      // at least two lines of the last paragraph (a one-line last paragraph may go alone with them).
+      const closingNeed = next.gap + next.rows.length;
+      if (gapOf(b) + b.rows.length + closingNeed <= room()) {
+        y += gapOf(b) * LH;
+        put(b.rows);
+      } else if (b.rows.length <= 3) {
+        // A paragraph of three lines or fewer is never divided: it moves with the closing.
+        newPage();
+        put(b.rows);
+      } else {
+        // Split so the last 2+ lines carry over with the closing.
+        const take = splitAt(b.rows, room() - gapOf(b), false);
+        const rest = b.rows.length - take;
+        if (take >= 2 && rest + closingNeed <= pageLines) {
+          y += gapOf(b) * LH;
+          put(b.rows.slice(0, take));
+          newPage();
+          put(b.rows.slice(take));
+        } else if (b.rows.length + closingNeed <= pageLines) {
+          // No clean split point: move the whole paragraph to the next page with the closing.
+          newPage();
+          put(b.rows);
+        } else {
+          placeSplittable(b);
+        }
+      }
+      i += 1; // place the closing right after
+      y += gapOf(next) * LH;
+      if (next.rows.length > room()) newPage();
+      put(next.rows);
+      continue;
+    }
+    if (b.splittable) {
+      placeSplittable(b);
+      continue;
+    }
+    const need = gapOf(b) + b.rows.length + (b.keepWithNext && next ? next.gap + Math.min(next.rows.length, 1) : 0);
+    if (need > room()) newPage();
+    y += gapOf(b) * LH;
+    put(b.rows);
+  }
+
+  // ---------------- Drawing ----------------
+  const pages: PDFPage[] = [];
+  for (let p = 0; p <= page; p += 1) pages.push(doc.addPage([PAGE_W, PAGE_H]));
+  const draw = (pg: PDFPage, seg: Seg, top: number, font: PDFFont, size = BODY_SIZE, color: RGB = BLACK) => {
+    const value = clean(seg.text);
+    if (!value) return;
+    const w = font.widthOfTextAtSize(value, size);
+    const x = seg.align === "right" ? seg.x + seg.width - w : seg.align === "center" ? seg.x + (seg.width - w) / 2 : seg.x;
+    pg.drawText(value, { x, y: PAGE_H - top - BASELINE * (size / BODY_SIZE), size, font, color });
+  };
+  const drawRow = (pg: PDFPage, row: Row, top: number) => row.forEach((seg) => draw(pg, seg, top, seg.bold ? fonts.bold : fonts.regular));
+
+  // Letterhead (page 1 only).
+  if (useLetterhead) {
+    const seal = spec.letterhead.sealImageDataUrl ? dataUrlBytes(spec.letterhead.sealImageDataUrl) : null;
+    if (seal) {
+      const image: PDFImage = seal.type === "png" ? await doc.embedPng(seal.bytes) : await doc.embedJpg(seal.bytes);
+      pages[0].drawImage(image, { x: SEAL_X, y: PAGE_H - SEAL_TOP - SEAL_SIZE, width: SEAL_SIZE, height: SEAL_SIZE });
+    }
+    // Army (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black.
+    // DHA (DHA letterhead): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, navy.
+    const lines = trimmedList(spec.letterhead.orgLines);
+    let baseline = dhaStyle ? 51 : 59;
+    lines.forEach((line, i) => {
+      const size = dhaStyle ? 12 : i === 0 ? 10 : 8;
+      const font = i === 0 ? fonts.lhBold : fonts.lhRegular;
+      const value = clean(line);
+      const w = font.widthOfTextAtSize(value, size);
+      pages[0].drawText(value, { x: (PAGE_W - w) / 2, y: PAGE_H - baseline, size, font, color: dhaStyle ? NAVY : BLACK });
+      baseline += dhaStyle ? 13.5 : i === 0 ? 9.1 : 9.2;
+    });
+  }
+  if (suspenseTop !== null) {
+    draw(pages[0], { text: `S: ${spec.suspense?.trim() ?? ""}`, x: MARGIN, width: CONTENT_W, align: "right" }, suspenseTop, fonts.bold);
+  }
+  officeRows.forEach((row, i) => drawRow(pages[0], row, officeTop + i * LH));
+  placed.forEach(({ page: p, top, row }) => drawRow(pages[p], row, top));
+
+  // Continuation pages: office symbol 1 inch from the top, subject on the next line,
+  // page number centered approximately 1 inch from the bottom. Page 1 is not numbered.
+  pages.forEach((pg, index) => {
+    if (index === 0) return;
+    contHeaderRows.forEach((row, i) => drawRow(pg, row, MARGIN + i * LH));
+    draw(pg, { text: String(index + 1), x: MARGIN, width: CONTENT_W, align: "center" }, PAGE_NUMBER_TOP, fonts.regular);
   });
 
   doc.setTitle(spec.subject.trim() || "Army memorandum");
@@ -1316,6 +1411,8 @@ ArmyMemo rules:
 - If the user gives more than five direct addressees, prefer distribution entries instead of forcing all direct addressees.
 - Keep subjects concise, ideally 10 words or fewer.
 - Body paragraph text must not include manual labels such as "1.", "a.", or "(1)" because ArmyMemo adds numbering automatically.
+- Use at most four paragraph levels (1., a., (1), (a)); never nest deeper. Never create a lone subparagraph (an "a" needs a "b").
+- A memorandum for record ("mfr") never has an authority line or THRU routing.
 - Use two spaces after sentence-ending periods and question marks in generated body text.
 - Counseling acknowledgment must be an object with statement and signers, null, or omitted. Never return acknowledgment as a plain string.
 - Leave unknown signer, addressee, routing, or authority details blank unless the user provides them. Ask concise follow-up questions when critical facts are missing.
@@ -1425,7 +1522,7 @@ function sanitizeParagraph(value: unknown, depth = 0): JsonRecord | null {
   }
   const rawChildren = record.children === undefined ? [] : record.children;
   if (!Array.isArray(rawChildren)) return null;
-  if (depth >= 5 && rawChildren.length > 0) return null;
+  if (depth >= 3 && rawChildren.length > 0) return null;
   const children = rawChildren.map((child) => sanitizeParagraph(child, depth + 1));
   if (children.some((child) => !child)) return null;
   return { text: record.text.trim(), children };
@@ -2596,7 +2693,7 @@ function MemoBlockEditor({
             <button
               aria-label={`Indent paragraph ${index + 1}`}
               className="icon-button"
-              disabled={index === 0 || block.depth >= Math.min(5, blocks[index - 1].depth + 1)}
+              disabled={index === 0 || block.depth >= Math.min(3, blocks[index - 1].depth + 1)}
               onClick={() => updateBlock(block.id, { depth: block.depth + 1 })}
               title="Indent"
               type="button"
@@ -2637,7 +2734,7 @@ function MemoBlockEditor({
             <button className="text-button" onClick={() => addAfter(index, block.depth)} type="button">
               Add paragraph
             </button>
-            <button className="text-button" onClick={() => addAfter(index, Math.min(5, block.depth + 1))} type="button">
+            <button className="text-button" onClick={() => addAfter(index, Math.min(3, block.depth + 1))} type="button">
               Add subparagraph
             </button>
           </div>
@@ -3046,28 +3143,18 @@ export default function App() {
 ----- APPENDIX N: tests/fixtures.ts (synthetic test fixtures) -----
 import { SPEC_VERSION, type MemoSpec } from "./src/model/memoSpec";
 
-// In the widget, use the inline seal data URL (section 3.6); null is fine for tests.
+// In tests the seal can be null; the app uses the inline seal data URL (section 3.6).
 const seal: string | null = null;
-
-const letterhead = {
-  displayName: "DHA",
-  orgLines: [
-    "DEFENSE HEALTH AGENCY",
-    "GENERAL LEONARD WOOD COMMUNITY HOSPITAL",
-    "4234 ILLINOIS AVE #351",
-    "FORT LEONARD WOOD, MO 65473"
-  ],
-  sealAssetPath: "assets/seals/army-seal.png",
-  sealImageDataUrl: seal,
-  letterheadStyle: "dha" as const
-};
+const addr = ["GENERAL LEONARD WOOD COMMUNITY HOSPITAL", "4234 ILLINOIS AVE #351", "FORT LEONARD WOOD, MO 65473"];
+const dha = { displayName: "DHA", orgLines: ["DEFENSE HEALTH AGENCY", ...addr], sealAssetPath: null, sealImageDataUrl: seal, letterheadStyle: "dha" as const };
+const army = { displayName: "Army", orgLines: ["DEPARTMENT OF THE ARMY", ...addr], sealAssetPath: null, sealImageDataUrl: seal, letterheadStyle: "army" as const };
 
 function base(o: Partial<MemoSpec> = {}): MemoSpec {
   return {
     specVersion: SPEC_VERSION,
     type: "memo",
-    profileId: "glwch-dha",
-    letterhead,
+    profileId: "glwch-army",
+    letterhead: army,
     officeSymbol: "MCXP-CCS",
     arimsRecordNumber: "25-50a",
     date: "14 October 2026",
@@ -3098,32 +3185,30 @@ function base(o: Partial<MemoSpec> = {}): MemoSpec {
   };
 }
 
-const long = "This sentence exists to exercise wrapping, pagination, and block-style runover so the generated layout can be compared against the Word output.  ";
+const long = "This sentence exists to exercise wrapping and pagination so the layout can be checked against the regulation.  ";
 
 export const fixtures: Record<string, MemoSpec> = {
   standard: base(),
+  dha: base({ letterhead: dha, profileId: "glwch-dha" }),
   complex: base({
     suspense: "1 November 2026",
-    thru: ["Commander, General Leonard Wood Community Hospital", "Deputy Commander for Administration"],
-    addressees: ["Commander, Maneuver Support Center of Excellence", "Chief of Staff, Fort Leonard Wood"],
+    thru: ["Commander, General Leonard Wood Community Hospital (MCXP-CDR), 4234 Illinois Avenue, Fort Leonard Wood, MO 65473"],
+    addressees: ["Commanding General, U.S. Army Maneuver Support Center of Excellence (ATZT-CG), 14000 MSCoE Loop, Fort Leonard Wood, MO 65473-8300"],
     subject: "Heat Illness Prevention and Response Standards for Training Units",
     authorityLine: "FOR THE COMMANDER:",
-    enclosures: ["Heat Category Matrix", "Cold Water Immersion Checklist"],
+    enclosures: ["Heat Category Matrix, 1 May 2026", "Cold Water Immersion Checklist"],
     cfRecipients: ["MSCoE G3", "Installation Safety Office"],
     paragraphs: [
       { text: "References.", children: [
-        { text: "AR 40-5, Army Public Health Program, 12 May 2020.", children: [] },
-        { text: "TB MED 507, Heat Stress Control and Heat Casualty Management, 7 March 2022.", children: [] }
+        { text: "AR 40-5 (Army Public Health Program).", children: [] },
+        { text: "TB MED 507 (Heat Stress Control and Heat Casualty Management).", children: [] }
       ] },
       { text: "Purpose.  " + long + long, children: [] },
       { text: "Responsibilities.", children: [
         { text: "Commanders will.  " + long, children: [
           { text: "Ensure training schedules account for heat category.  " + long, children: [
-            { text: "Fourth level paragraph one.  " + long, children: [] },
-            { text: "Fourth level paragraph two.", children: [
-              { text: "Fifth level one.", children: [] },
-              { text: "Fifth level two.", children: [] }
-            ] }
+            { text: "Third subdivision paragraph one.  " + long, children: [] },
+            { text: "Third subdivision paragraph two.", children: [] }
           ] },
           { text: "Maintain cold water immersion capability.  " + long, children: [] }
         ] },
@@ -3132,18 +3217,40 @@ export const fixtures: Record<string, MemoSpec> = {
       { text: "Coordination.  " + long + long + long, children: [] },
       { text: "Training.  " + long + long, children: [] },
       { text: "Reporting.  " + long + long, children: [] },
-      { text: "The point of contact for this memorandum is the undersigned at (573) 596-0000.", children: [] }
+      { text: "The point of contact for this memorandum is the undersigned at (573) 596-0000 or jordan.a.rivera.mil@health.mil.  " + long + long, children: [] }
     ]
   }),
+  multi: base({
+    addressees: [
+      "Commander, 1st Engineer Brigade (ATZT-EN), 14000 MSCoE Loop, Fort Leonard Wood, MO 65473-8929",
+      "Commander, 14th Military Police Brigade (ATZT-MP), Fort Leonard Wood, MO 65473",
+      "Commander, 3d Chemical Brigade (ATZT-CM), Fort Leonard Wood, MO 65473"
+    ],
+    thru: [],
+    subject: "Seasonal Influenza Vaccination Campaign"
+  }),
+  thru2: base({
+    thru: ["Deputy Commander for Administration (MCXP-DCA)", "Commander, General Leonard Wood Community Hospital (MCXP-CDR)"],
+    addressees: ["Commanding General, U.S. Army Maneuver Support Center of Excellence"],
+    subject: "Memorandum Thru Two Addressees"
+  }),
+  single: base({
+    subject: "One Paragraph With Subparagraphs",
+    paragraphs: [{ text: "This one-paragraph memorandum is not numbered.  Its subparagraphs are lettered and indented.", children: [
+      { text: "First subparagraph.", children: [] },
+      { text: "Second subparagraph.", children: [] }
+    ] }]
+  }),
+  mfr: base({ type: "mfr", subject: "Clinic Huddle Time Change", enclosures: ["Huddle Roster"] }),
   counseling: base({
     type: "counseling",
+    letterhead: dha,
     subject: "Initial Counseling",
     acknowledgment: {
       statement: "I have received and understand this counseling.  I had the opportunity to ask questions and discuss the plan of action.",
       signers: [{ label: "[RATED OFFICER]" }, { label: "[RATER OR SENIOR RATER]" }]
     },
-    signature: { name: "Pat Q. Civilian", rankBranch: "", title: ["Chief, Clinical Operations", "General Leonard Wood Community Hospital"], civilian: true },
-    enclosures: ["Support Form"]
+    signature: { name: "Pat Q. Civilian", rankBranch: "", title: ["Chief, Clinical Operations, General Leonard Wood Community Hospital"], civilian: true }
   }),
   distribution: base({
     addressees: [],
