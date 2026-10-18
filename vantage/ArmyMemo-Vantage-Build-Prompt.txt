@@ -3,101 +3,81 @@ ARMYMEMO FOR VANTAGE — AI FDE BUILD PROMPT
 (Paste everything in this file into AI FDE. Model: GPT-5.6. Before sending, drag the Vantage folder where this should live into the AI FDE context. If the chat box rejects the length, upload this .txt into that folder and drag the file into context instead, then send: "Build ArmyMemo for Vantage exactly as specified in the attached file.")
 
 ROLE AND GOAL
-You are building "ArmyMemo" inside Army Vantage (Palantir Foundry). ArmyMemo already exists as a React web app (github.com/matthewdholtkamp/Memo, not reachable from here). Its complete source for everything that matters is in the appendices of this prompt. Rebuild it in Vantage so it looks, feels, and behaves almost identically, with ONE deliberate change: the output is an unsigned PDF instead of a .docx. A working, tested PDF engine is provided in Appendix G — use it as written.
+You are building "ArmyMemo" inside Army Vantage (Palantir Foundry). ArmyMemo already exists as a React web app (github.com/matthewdholtkamp/Memo, not reachable from here). Its complete source for everything that matters is in the appendices of this prompt. Rebuild it in Vantage so it looks, feels, and behaves almost identically, with these deliberate changes: the output is an unsigned PDF instead of a .docx (a tested PDF engine is in Appendix G — use it as written), nothing is ever saved, and the AI assistant runs through native Workshop.
+
+HARD CONSTRAINTS (non-negotiable)
+- NO permission changes of any kind: no unscoped Ontology API access for the widget set, no new roles, no ISO or admin requests. Use only standard Workshop features and the GPT-5.6 Terra access every user already has.
+- ANONYMOUS, STORES NOTHING: no object types, datasets, actions, attachments, or media for memos; no browser storage (localStorage, sessionStorage, IndexedDB); no draft save/load. The memo lives only in the open page. The user downloads the PDF and it is gone when the tab closes.
+- The custom widget makes NO Ontology/OSDK/API calls at all. It receives the AI result from Workshop through an input parameter. It reads no Vantage data about anyone.
 
 End state, all inside one folder named "ArmyMemo":
-1. An Ontology object type that stores memo drafts and their PDFs.
-2. An AIP-backed function that powers the "Ask Dr. Holtkamp" memo assistant.
-3. A custom widget set (OSDK React) that is the ArmyMemo app itself.
-4. A Workshop module named "ArmyMemo" (the dashboard) that hosts the widget full-screen plus a "My Drafts" tab.
+1. A stable, published global function askArmyMemoAssistantSimple that calls GPT-5.6 Terra.
+2. A custom widget set "ArmyMemo" (React) that is the memo editor, preview, compliance panel, and PDF generator.
+3. A Workshop module "ArmyMemo": a native "Ask Dr. Holtkamp" panel (text area + Send button) beside the ArmyMemo widget. Workshop calls the function and passes the result into the widget.
 
 HOW TO WORK
-- Use these modes as needed: Exploration, Ontology editing, Functions editing, OSDK React. Switch modes yourself.
+- Use these modes as needed: Exploration, Functions editing, OSDK React (for the widget repo only). Switch modes yourself.
 - Start with "Generate plan": show me a short phase plan, then proceed without waiting unless something is blocked.
 - Work in phases (below). After each phase, verify it (previews, CI checks, function previews) before moving on. Fix your own errors in a loop; do not hand me broken work.
-- Use branching. Put Ontology changes in one Global Branch proposal and code in Code Repository pull requests. Tell me exactly what I must approve/merge and in what order.
-- Ask me questions only when truly blocked (permissions, a missing enrollment setting). Use multiple-choice questions.
+- Use branching: code in Code Repository pull requests, Workshop changes in a proposal. Tell me exactly what I must approve/merge and in what order. Always bind Workshop to STABLE released versions, never branch prereleases.
+- Ask me questions only when truly blocked. Use multiple-choice questions.
 - Do not invent features that are not in this spec. Do not drop features that are in it.
 - Never put PHI, patient data, or real memo content into tests, examples, or seed data. Use the synthetic fixtures in Appendix N.
 
 PHASE 0 — EXPLORE AND SET UP
 - Confirm the target location from the folder I dragged into context (if none, ask me which project). Create a folder "ArmyMemo" there. Everything you create lives in it.
-- Check: AIP enabled; which OpenAI models are enabled (prefer GPT-5.6 for the assistant function; if unavailable, the strongest enabled GPT model — tell me which); whether widget sets can be created; whether Global Branching is on.
-- Report anything an administrator must enable (for example "Enable widget set unscoped API access" / Ontology APIs for the widget set, which needs an Information Security Officer or a custom role). Give me the exact request text to send.
+- Check: AIP enabled; GPT-5.6 Terra available for functions (if not, the strongest available GPT model — tell me which); widget sets can be created. Do not request any permission or admin change.
 
-PHASE 1 — ONTOLOGY
-Object type: "Army Memo Draft" (API name ArmyMemoDraft). Create whatever backing datasource it needs.
-Properties:
-- memoId — string, primary key (UUID generated by the widget)
-- title — string (subject; title property)
-- memoType — string ("memo" | "mfr" | "counseling")
-- status — string ("Draft" | "PDF generated")
-- officeSymbol — string
-- memoDate — string (as typed, e.g. "14 October 2026" or "[DATE]")
-- signerName — string
-- specJson — string (the full MemoSpec JSON from Appendix A; this is the source of truth)
-- ownerUserId — string (Foundry user ID of the creator)
-- updatedAt — timestamp
-- pdfFile — attachment (latest generated PDF)
-Actions (all with clear display names):
-- "Create Army Memo Draft": params memoId, specJson, title, memoType, officeSymbol, memoDate, signerName. Sets ownerUserId = current user, status "Draft", updatedAt = now.
-- "Update Army Memo Draft": object + specJson, title, memoType, officeSymbol, memoDate, signerName. Sets updatedAt = now. Submission criteria: current user = ownerUserId.
-- "Attach Army Memo PDF": object + pdf (attachment). Sets pdfFile, status "PDF generated", updatedAt = now. Submission criteria: owner only.
-- "Delete Army Memo Draft": object. Owner only.
-Verify each action runs on a test object, then clean the test object up.
+PHASE 1 — ASK DR. HOLTKAMP FUNCTION
+Create a TypeScript functions repository in the ArmyMemo folder with a GLOBAL @Function (not an Ontology @Query):
+  askArmyMemoAssistantSimple(instruction: string, currentMemoJson: string): string
+- Model: GPT-5.6 Terra via Model Imports, low reasoning effort, JSON-object response format, maxTokens about 3000. Use the call pattern from the model's sidebar snippet.
+- System message: ARMYMEMO_ASSISTANT_PROMPT from Appendix J, word for word.
+- User message: JSON.stringify({ instruction, currentMemo: <parsed currentMemoJson or {}>, compliance: [], recentConversation: [] }, null, 2). If currentMemoJson is empty or invalid, use {}.
+- Return JSON.stringify({ nonce: <unique per call, e.g. timestamp + random>, completion: <model text> }). On any failure return JSON.stringify({ nonce, error: "<short category>" }). Never throw.
+- Publish a stable version.
+- Test with a function preview: instruction "Draft an MFR documenting that the clinic huddle moved to 0730 on Tuesdays", currentMemoJson "{}". Expect an envelope whose completion parses (parseAssistantText, Appendix J) to action "applyPatch" with type "mfr", a subject, and paragraphs without manual numbering.
 
-PHASE 2 — ASK DR. HOLTKAMP FUNCTION
-Create a function (TypeScript function using a Foundry-registered language model, or AIP Logic if that is cleaner here — your call, tell me which):
-  askArmyMemoAssistant(instruction: string, currentMemoJson: string, complianceJson: string, recentConversationJson: string): string
-- System prompt: use the ARMYMEMO_ASSISTANT_PROMPT text from Appendix J exactly, word for word.
-- User content: one JSON string { instruction, currentMemo, compliance, recentConversation } exactly as the original client builds it (Appendix J, callMemoAssistant). Strip seal image data from currentMemo before sending.
-- Ask the model for JSON output (JSON mode / structured output if the model supports it), low reasoning effort.
-- Return the model's raw JSON text. The widget does the normalization and validation (Appendix J sanitize/normalize logic) so the behavior matches the original exactly.
-- Publish it and add it to the widget set's SDK.
-- Test with a function preview: instruction "Draft an MFR documenting that the clinic huddle moved to 0730 on Tuesdays" against the default spec. Expect action "applyPatch" with type "mfr", a subject, and paragraphs without manual numbering.
+PHASE 2 — THE WIDGET SET (THIS IS THE APP)
+Create a widget set named "ArmyMemo" in the ArmyMemo folder, developed in Foundry (Code Repository, React template). One widget: "ArmyMemo". Do NOT configure the OSDK and do not add any Ontology resources to it.
 
-PHASE 3 — THE WIDGET SET (THIS IS THE APP)
-Create a widget set named "ArmyMemo" in the ArmyMemo folder, developed in Foundry (Code Repository, React template). One widget: "ArmyMemo".
-
-3.1 Configure the SDK with: ArmyMemoDraft (read), the four actions, and askArmyMemoAssistant. Use createClient from @osdk/client with window.location.origin and createFoundryWidgetTokenProvider(), per the widget-set OSDK docs.
-
-3.2 Widget config (defineConfig):
-- parameters: memoId (string) — the draft to open; empty = new memo.
-- events: memoSaved — updates parameter memoId (so Workshop knows which draft is open).
+Widget config (defineConfig):
+- parameters: assistantResponse (string) — input from Workshop; currentMemoJson (string) — the widget writes it.
+- events: memoChanged — updates parameter currentMemoJson.
 - permissions: ["allow-downloads"] (needed for the PDF download).
-- refreshHostDataOnAction: true.
 
-3.3 Dependencies: react, react-dom, pdf-lib 1.17.1, zod 4.x. If zod cannot be installed from the Foundry npm mirror, replace the zod schemas with equivalent hand-written TypeScript types and type-guard parsers — behavior must not change. No other third-party packages. The widget runtime blocks external network requests, so nothing may be fetched from the internet at runtime (no CDN fonts, no remote images).
+2.1 Dependencies: react, react-dom, pdf-lib 1.17.1, zod 4.x. If zod cannot be installed from the Foundry npm mirror, replace the zod schemas with equivalent hand-written TypeScript types and type-guard parsers — behavior must not change. No other third-party packages. The widget runtime blocks external network requests, so nothing may be fetched from the internet at runtime (no CDN fonts, no remote images).
 
-3.4 Port these files with no logic changes (paths are suggestions):
+2.2 Port these files with no logic changes (paths are suggestions):
 - src/model/memoSpec.ts (Appendix A)
 - src/model/defaultSpec.ts (Appendix B)
-- src/model/profiles.ts (Appendix C) — see 3.6 for the seal
+- src/model/profiles.ts (Appendix C) — see 2.4 for the seal
 - src/model/blocks.ts (Appendix D)
 - src/generator/format.ts (Appendix E)
 - src/validation/validate.ts (Appendix F)
 - src/generator/buildPdf.ts (Appendix G) — NEW, already tested; use as written
-- src/assistant/schema.ts, apply.ts, client.ts (Appendix H, I, J) — in client.ts, replace ONLY the fetch to the Cloudflare/Gemini worker with a call to askArmyMemoAssistant through the OSDK client; keep every sanitize/normalize function exactly.
-- src/model/drafts.ts (Appendix K) — keep, but wrap every localStorage call in try/catch so the widget still works if storage is blocked.
+- src/assistant/schema.ts, apply.ts, client.ts (Appendix H, I, J). Appendix J is the Workshop client: it makes no calls; it exports ARMYMEMO_ASSISTANT_PROMPT, memoJsonForAssistant, readAssistantEnvelope, and parseAssistantText. Its tests are Appendix P.
+- Do NOT port drafts.ts or any storage code.
 - src/ui/CompliancePanel.tsx, MemoStageStrip.tsx, StructuralPreview.tsx, AskDrHoltkampPanel.tsx, icons.tsx (Appendix L)
-- src/App.tsx (Appendix M) with the changes in 3.5
+- src/App.tsx (Appendix M) with the changes in 2.3
 - src/styles.css (Appendix O) — copy it whole. This file is the look and feel; do not restyle.
 
-3.5 App.tsx changes (everything else stays identical — layout, labels, stage strip, block editor, compliance navigation, assistant drawer, undo, sentence-spacing proposal, example memo):
-a) "Generate .docx" becomes "Generate PDF". It runs validateMemo; if canGenerate, it builds the PDF with buildPdf(spec) and downloads it as memoPdfFilename(spec). Feedback text: "Downloaded unsigned PDF. Use the CAC signing guide for the Adobe handoff."
-b) Add "Save to Vantage" (secondary button, left of "Save draft JSON"). If no memoId: generate a UUID, run "Create Army Memo Draft", then emit memoSaved with the new memoId. Otherwise run "Update Army Memo Draft". Feedback: "Saved to Vantage."
-c) "Generate PDF" also saves the draft (as in b) and then runs "Attach Army Memo PDF" with the PDF uploaded as an attachment, so the PDF is stored with the draft. If the attachment upload fails, the download must still succeed; show the error in the feedback line.
-d) On load: if parameter memoId is set, load that ArmyMemoDraft and parse specJson (memoSpecSchema / refreshBuiltInProfileDefaults) into the editor. If memoId changes while open, load the new draft. If empty, restore the local autosave or start the default spec.
-e) Privacy bar text: "Drafts save to Vantage under your account permissions." Keep the "Clear saved draft" button (clears the local autosave only).
-f) "New memo" also clears memoId (emit memoSaved with "").
-g) CAC signing guide steps become: 1. Generate and review the unsigned PDF. 2. Complete the official date after signature coordination. 3. Open the PDF in Adobe Acrobat. 4. Place the CAC-secured digital signature field above the typed signature block. 5. Follow your organization's records-management and release procedures. Notice box text stays: "ArmyMemo prepares an unsigned formatting aid. It does not apply, validate, or replace a CAC-secured signature."
-h) Structural preview helper text: "Final spacing and pagination are set in the generated PDF." Expanded preview subtitle: "PDF layout approximation". The StructuralPreview in Appendix L already follows the same AR 25-50 rules as the PDF (no letterhead for MFR, one-paragraph memos unnumbered, multiple-address and THRU layout); keep it as is.
-i) The Ask Dr. Holtkamp drawer, header button (gold pill with ✦✦✦), message cards, chips, warnings, questions, undo — identical. It calls askArmyMemoAssistant through OSDK.
+2.3 App.tsx changes (everything else stays identical — layout, labels, stage strip, block editor, compliance navigation, assistant drawer, undo, sentence-spacing proposal, example memo):
+a) "Generate .docx" becomes "Generate PDF". It runs validateMemo; if canGenerate, it builds the PDF with buildPdf(spec) and downloads it as memoPdfFilename(spec). Feedback text: "Downloaded unsigned PDF. Nothing was saved."
+b) Remove autosave, "Save draft JSON", "Load draft", "Clear saved draft", and every localStorage/sessionStorage call.
+c) Privacy bar text: "Nothing is saved. Download your PDF before you close this page."
+d) "New memo" resets the editor to the default spec.
+e) Every time the memo changes, emit memoChanged with currentMemoJson = memoJsonForAssistant(spec) (the seal image is never sent), debounced 500 ms. If this update ever fails, nothing else may break.
+f) Receiving the assistant result: watch the assistantResponse parameter. When it changes, run readAssistantEnvelope(value). Ignore kind "empty" and any nonce already handled. On kind "response": if response.action is "applyPatch", save an undo snapshot, apply applyAssistantPatch to the current spec, and load it so BOTH the spec and the paragraph blocks (flattenParagraphs) update. Show the assistant message, changed-field chips, warnings, questions, and "Undo AI changes" in the drawer, and open the drawer. On kind "error", show its message in the drawer and leave the memo unchanged. While the Workshop function variable is loading, the drawer may show "Dr. Holtkamp is drafting..." only if Workshop exposes that state; never block the editor.
+g) The Ask Dr. Holtkamp drawer keeps the gold "✦✦✦ Ask Dr. Holtkamp" header pill, message cards, chips, warnings, questions, and Undo, but has NO text box or Send button (the request is typed in the native Workshop panel). Add one line at the top of the drawer: "Type your request in the Ask Dr. Holtkamp box beside the memo."
+h) CAC signing guide steps become: 1. Generate and review the unsigned PDF. 2. Complete the official date after signature coordination. 3. Open the PDF in Adobe Acrobat. 4. Place the CAC-secured digital signature field above the typed signature block. 5. Follow your organization's records-management and release procedures. Notice box text stays: "ArmyMemo prepares an unsigned formatting aid. It does not apply, validate, or replace a CAC-secured signature."
+i) Structural preview helper text: "Final spacing and pagination are set in the generated PDF." Expanded preview subtitle: "PDF layout approximation". The StructuralPreview in Appendix L already follows the AR 25-50 rules; keep it as is.
+j) Show a small build stamp in the footer: "ArmyMemo widget <version>".
 
-3.6 Seal: the letterhead seal is army-seal.png (163 x 163 px). I will upload it into the ArmyMemo folder (or give it to you in context). Place it in the repo at src/assets/army-seal.png and import it inline (Vite: import sealDataUrl from "./assets/army-seal.png?inline"). In profiles.ts, set sealImageDataUrl for both built-in profiles to that data URL so buildPdf and the preview always have it; never fetch it at runtime. If you cannot get the PNG into the repo, ship without it and add a small "Upload seal" button in Memo setup (PNG/JPEG, 2 MB max, stored in the draft spec as a data URL, same rules as Appendix seals logic below) and tell me.
+2.4 Seal: the letterhead seal is army-seal.png (163 x 163 px). I will upload it into the ArmyMemo folder (or give it to you in context). Place it in the repo at src/assets/army-seal.png and import it inline (Vite: import sealDataUrl from "./assets/army-seal.png?inline"). In profiles.ts, set sealImageDataUrl for both built-in profiles to that data URL so buildPdf and the preview always have it; never fetch it at runtime. If you cannot get the PNG into the repo, ship without it and add a small "Upload seal" button in Memo setup (PNG/JPEG, 2 MB max, kept in the open memo only (never stored), same rules as Appendix seals logic below) and tell me.
    Seals logic to keep: PNG or JPEG only; max 2 MB; error messages "Seal images must be PNG or JPEG files." / "Seal images must be 2 MB or smaller."
 
-3.7 PDF rules — AR 25-50 (10 October 2020, administrative revision 4 October 2024), already implemented and tested in Appendix G. Do not "improve" or change them:
+2.5 PDF rules — AR 25-50 (10 October 2020, administrative revision 4 October 2024), already implemented and tested in Appendix G. Do not "improve" or change them:
 - Letter size; 1 in left, right and bottom margins; ragged right; Arial 12 -> Helvetica, Times New Roman 12 -> Times-Roman (metric-identical PDF standard fonts); single-spaced lines of 13.8 pt; one blank line between paragraphs and subparagraphs.
 - Letterhead (page 1 only): 1 in seal at 0.5 in from the top and left edges. Army style (APD template): line 1 Arial Bold 10 pt, other lines Arial Bold 8 pt, black, centered. DHA style (DHA letterhead layout): line 1 Times New Roman Bold 12 pt, other lines Times New Roman 12 pt, black, centered. Black ink for all letterhead (paras 1-16b(3), 1-20). Style comes from letterhead.letterheadStyle.
 - Office symbol on the second line below the seal, with the ARIMS number one space after it in parentheses; date flush right on the same line. Suspense "S: date" bold, flush right, two lines above the date line.
@@ -110,35 +90,39 @@ i) The Ask Dr. Holtkamp drawer, header button (gold pill with ✦✦✦), messag
 - Page breaks: a paragraph of three lines or fewer is never divided; a divided paragraph keeps at least two lines on each page; a divided sentence keeps at least two words on each page; no hyphenation; the authority line and signature block never go to a page without at least two lines of the last paragraph (a one-line last paragraph may go with them).
 - Unsupported characters print as "?". Filename is the subject only, no date.
 
-3.8 Make it fill the Workshop widget area responsively (min height 100% of the iframe). Keep the three-column workspace at desktop widths; the existing CSS already has responsive rules.
+2.6 Make it fill the Workshop widget area responsively (min height 100% of the iframe). Keep the three-column workspace at desktop widths; the existing CSS already has responsive rules.
 
-3.9 Tests: add vitest (or the repo's existing test runner) and port these checks against the synthetic fixtures in Appendix N:
+2.7 Tests: add vitest (or the repo's existing test runner) and port these checks against the synthetic fixtures in Appendix N:
 - validateMemo: missing subject blocks generation; lone subparagraph blocks generation; blank ARIMS is only a warning; single-space sentences raise the spacing warning.
 - blocks: flatten/blocksToParagraphs round-trip; numberLabel gives 1., a., (1), (a), 1), a).
 - validateMemo: a paragraph nested below (a) blocks generation; an authority line on an MFR blocks generation.
 - buildPdf: each fixture produces a valid PDF (starts with %PDF); the "complex" fixture is 2 pages; its page 1 contains the letterhead text and no page number; its page 2 contains "SUBJECT: Heat Illness Prevention" (one space) and "2"; the "single" fixture contains no "1." label; the "mfr" fixture contains no letterhead text.
 - assistant apply: a patch with type "counseling" adds the default acknowledgment; paragraphs patch replaces the body.
+- Appendix P (client tests) as written.
+- assistant receive: an assistantResponse envelope with a new nonce applies the patch and updates both spec and paragraph blocks; the same nonce twice applies once; an { error } envelope changes nothing and shows the error; a fenced or extra-key completion still applies.
+- storage: no code path writes to localStorage, sessionStorage, or IndexedDB (assert in a test by spying on Storage.prototype.setItem).
 CI must pass before you publish.
 
-3.10 Publish the widget set release.
+2.8 Publish the widget set release.
 
-PHASE 4 — THE WORKSHOP DASHBOARD
+PHASE 3 — THE WORKSHOP MODULE
 Create a Workshop module "ArmyMemo" in the ArmyMemo folder:
-- String variable openMemoId (default empty).
-- Tab "Write": the ArmyMemo custom widget filling the whole page; parameter memoId bound to openMemoId; event memoSaved updates openMemoId. Grant the allow-downloads permission in the widget's Permissions section.
-- Tab "My Drafts": object table of ArmyMemoDraft filtered to ownerUserId = current user, sorted by updatedAt descending; columns title, memoType, status, memoDate, updatedAt. Row selection sets openMemoId and switches to "Write". Buttons: "Open" (same as selection), "Download PDF" (export/download the pdfFile attachment), "Delete" (Delete Army Memo Draft, with confirmation).
-- Module header: title "ArmyMemo", no other chrome (the widget has its own header).
+- String variables: aiInstruction (default ""), currentMemoJson (default "{}").
+- Function variable "Dr. Holtkamp response": askArmyMemoAssistantSimple(aiInstruction, currentMemoJson), stable version. Recompute ONLY when the Send button's event fires (recalculateVariable). No onInputsChange. One click = one execution. Do not run on module load.
+- Layout: one page, no tabs. Left: a narrow native panel titled "Ask Dr. Holtkamp" (match the black/gold style) with a Text Area bound to aiInstruction (placeholder: "Example: Draft an MFR documenting that the clinic huddle moved to 0730 on Tuesdays.") and a primary Button "Send to Dr. Holtkamp" whose click event recalculates "Dr. Holtkamp response". Right: the ArmyMemo custom widget filling the rest of the page.
+- Widget bindings: assistantResponse <- "Dr. Holtkamp response"; currentMemoJson <-> currentMemoJson; event memoChanged updates currentMemoJson. Grant allow-downloads in the widget's Permissions section.
+- Module header: title "ArmyMemo". No other tabs, tables, or object views.
 If you cannot create or edit Workshop modules directly, give me numbered click-by-click steps to do exactly this, and stop there.
 
-PHASE 5 — VERIFY AND REPORT
-Run, in dev mode in the Workshop module:
+PHASE 4 — VERIFY AND REPORT
+In the live module (after a hard refresh):
 1. Load example -> Generate PDF. Confirm download, page 1 letterhead and seal, no page number, signature at page center.
-2. Build the "complex" fixture by hand or via Load draft JSON. Confirm 2 pages, continuation header 1 in from the top, page number 2, suspense two lines above the date, MEMORANDUM THRU / FOR lines, "2 Encls" beside the signature block, CF list.
+2. Build the "complex" fixture by hand. Confirm 2 pages, continuation header 1 in from the top, page number 2, suspense two lines above the date, MEMORANDUM THRU / FOR lines, "2 Encls" beside the signature block, CF list.
 3. Counseling type: MEMORANDUM FOR RECORD and ACKNOWLEDGMENT section. MFR type: no letterhead, office symbol 1 in from the top.
-4. Save to Vantage, reload the module, reopen from My Drafts — same content.
-5. Ask Dr. Holtkamp: "Turn this into an MFR about moving the clinic huddle to 0730 Tuesdays." Confirm fields update and Undo works.
-6. Compliance panel: clear the subject — Generate PDF disables and the item navigates to the Subject field.
-Final report to me (short): links to the folder, Workshop module, widget set, object type, function; what I must approve or merge; anything an admin must enable; any deviation from this spec and why.
+4. Ask Dr. Holtkamp: type "Draft an MFR documenting that the clinic huddle moved to 0730 on Tuesdays" in the native panel and click Send once. Confirm exactly one function execution, the form switches to MFR with a subject and a paragraph, chips show, and Undo restores the previous memo.
+5. Compliance panel: clear the subject — Generate PDF disables and the item navigates to the Subject field.
+6. Reload the page: the memo is gone (nothing persisted). Confirm no object types, datasets, actions, or media sets were created for memos.
+Final report to me (short): links to the folder, Workshop module, widget set, and function; what I must approve or merge, in order; the build stamp I should see; any deviation from this spec and why.
 
 GUARDRAILS
 - No external network calls from the widget. No telemetry.
@@ -146,6 +130,7 @@ GUARDRAILS
 - Do not add features (no MOU/MOA, no e-signature, no auto-routing).
 - Treat this app as an unsigned formatting aid; it never signs anything.
 - Keep everything inside the ArmyMemo folder.
+- Never request or depend on permission changes. Never store memo content anywhere.
 
 ==========================================================================
 APPENDICES — REFERENCE SOURCE (port exactly unless a section above says otherwise)
@@ -1244,7 +1229,7 @@ import {
   signatureSchema
 } from "../model/memoSpec";
 
-// (Worker URL and Gemini model constants removed: the assistant now runs through askArmyMemoAssistant in Vantage.)
+// (Worker URL and Gemini model constants removed: the assistant runs through askArmyMemoAssistantSimple in Workshop.)
 
 export const assistantPatchSchema = z
   .object({
@@ -1382,19 +1367,11 @@ export function appliedFieldsFromResponse(response: AssistantResponse): string[]
 }
 ----- END APPENDIX I -----
 
------ APPENDIX J: src/assistant/client.ts (replace only the fetch to the worker with the OSDK call to askArmyMemoAssistant) -----
+----- APPENDIX J: src/assistant/client.ts (Workshop client — use as written; it makes no calls) -----
 import type { MemoSpec } from "../model/memoSpec";
-import type { ComplianceItem } from "../validation/validate";
-import {
-  ASSISTANT_FALLBACK_MODEL,
-  ASSISTANT_MODEL,
-  ASSISTANT_WORKER_URL,
-  assistantResponseSchema,
-  type AssistantMessage,
-  type AssistantResponse
-} from "./schema";
+import { assistantResponseSchema, type AssistantResponse } from "./schema";
 
-const ARMYMEMO_ASSISTANT_PROMPT = `You are Dr. Holtkamp Memo Assist inside ArmyMemo.
+export const ARMYMEMO_ASSISTANT_PROMPT = `You are Dr. Holtkamp Memo Assist inside ArmyMemo.
 
 Mission:
 - Help users convert rough notes, old memorandum text, or plain-language instructions into an ArmyMemo draft.
@@ -1445,22 +1422,6 @@ JSON response shape:
 }
 
 Omit memoPatch keys that should not change. Use "askClarifyingQuestion" when you need user input before changing the memo.`;
-
-const geminiTextResponseSchema = {
-  parse(data: unknown): string {
-    if (!data || typeof data !== "object") return "";
-    const candidates = (data as { candidates?: unknown }).candidates;
-    if (!Array.isArray(candidates)) return "";
-    return candidates
-      .flatMap((candidate) => {
-        const parts = (candidate as { content?: { parts?: unknown } }).content?.parts;
-        return Array.isArray(parts) ? parts : [];
-      })
-      .map((part) => (typeof (part as { text?: unknown }).text === "string" ? (part as { text: string }).text : ""))
-      .join("")
-      .trim();
-  }
-};
 
 function extractJson(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
@@ -1702,134 +1663,126 @@ function stripSealData(spec: MemoSpec): MemoSpec {
   };
 }
 
-export async function callMemoAssistant({
-  instruction,
-  messages,
-  spec,
-  validationItems
-}: {
-  instruction: string;
-  messages: AssistantMessage[];
-  spec: MemoSpec;
-  validationItems: ComplianceItem[];
-}): Promise<AssistantResponse> {
-  const contents = [
-    {
-      role: "user",
-      parts: [
-        {
-          text: JSON.stringify(
-            {
-              instruction,
-              currentMemo: stripSealData(spec),
-              compliance: validationItems.map(({ code, label, level, detail }) => ({
-                code,
-                label,
-                level,
-                detail
-              })),
-              recentConversation: messages.slice(-8).map(({ role, text }) => ({ role, text }))
-            },
-            null,
-            2
-          )
-        }
-      ]
-    }
-  ];
+// The memo JSON the widget sends to Workshop (memoChanged -> currentMemoJson). The seal image is never sent.
+export function memoJsonForAssistant(spec: MemoSpec): string {
+  return JSON.stringify(stripSealData(spec));
+}
 
-  const response = await fetch(`${ASSISTANT_WORKER_URL}?stream=0`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: ASSISTANT_MODEL,
-      fallbackModel: ASSISTANT_FALLBACK_MODEL,
-      stream: false,
-      systemInstruction: { role: "system", parts: [{ text: ARMYMEMO_ASSISTANT_PROMPT }] },
-      contents,
-      generationConfig: {
-        thinkingConfig: { thinkingLevel: "low" },
-        responseMimeType: "application/json"
+// The function may come back as a string, a double-encoded string, or an object. Normalize to text.
+export function functionResultToText(result: unknown): string {
+  if (typeof result === "string") {
+    const trimmed = result.trim();
+    if (trimmed.startsWith('"')) {
+      try {
+        const inner = JSON.parse(trimmed);
+        if (typeof inner === "string") return inner;
+      } catch {
+        /* not double-encoded */
       }
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`The Gemini Worker returned ${response.status}.`);
+    }
+    return trimmed;
   }
-
-  const text = geminiTextResponseSchema.parse(await response.json());
-  if (!text) {
-    throw new Error("The assistant returned an empty response.");
+  if (result && typeof result === "object") {
+    const record = result as Record<string, unknown>;
+    for (const key of ["value", "result", "completion", "output"]) {
+      if (typeof record[key] === "string") return functionResultToText(record[key]);
+    }
+    return JSON.stringify(result);
   }
+  return "";
+}
 
-  return assistantResponseSchema.parse(normalizeAssistantResponse(extractJson(text)));
+// Turn whatever the model said into a valid AssistantResponse. Never throws on extra keys;
+// plain prose becomes a no-change chat reply instead of an error.
+export function parseAssistantText(text: string): AssistantResponse {
+  if (!text.trim()) throw new Error("Dr. Holtkamp returned an empty response. Please send again.");
+  let parsed: unknown;
+  try {
+    parsed = extractJson(text);
+  } catch {
+    return assistantResponseSchema.parse({
+      assistantMessage: text.trim().slice(0, 2000),
+      action: "noChange",
+      memoPatch: null,
+      changedFields: [],
+      warnings: [],
+      questions: []
+    });
+  }
+  const direct = sanitizeAssistantResponse(parsed);
+  if (direct) {
+    if (direct.action !== "applyPatch" && looksLikeJsonBlock(direct.assistantMessage)) {
+      return assistantResponseSchema.parse(normalizeAssistantResponse(parsed));
+    }
+    return assistantResponseSchema.parse(direct);
+  }
+  const normalized = normalizeAssistantResponse(parsed);
+  const clean = sanitizeAssistantResponse(normalized);
+  if (clean) return assistantResponseSchema.parse(clean);
+  // The model returned bare memo fields with no envelope.
+  const patch = sanitizePatch(parsed);
+  if (patch) {
+    return assistantResponseSchema.parse({
+      assistantMessage: "I updated the memo fields.",
+      action: "applyPatch",
+      memoPatch: patch,
+      changedFields: patchChangedFields(patch),
+      warnings: [],
+      questions: []
+    });
+  }
+  throw new Error("Dr. Holtkamp's reply did not match the memo fields. Please send again.");
+}
+
+// What askArmyMemoAssistantSimple returns through the Workshop function variable:
+//   { nonce, completion } on success, { nonce, error } on failure.
+// Workshop may hand it over as a string, a double-encoded string, or an object.
+export type AssistantEnvelope =
+  | { kind: "empty" }
+  | { kind: "response"; nonce: string; response: AssistantResponse }
+  | { kind: "error"; nonce: string; message: string };
+
+function envelopeRecord(raw: unknown): Record<string, unknown> | null {
+  let value: unknown = raw;
+  for (let i = 0; i < 3 && typeof value === "string"; i += 1) {
+    const text = value.trim();
+    if (!text) return null;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      return { completion: text };
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  for (const key of ["value", "result", "output"]) {
+    const inner = record[key];
+    if (inner !== undefined && !("nonce" in record) && !("completion" in record) && !("error" in record)) {
+      return envelopeRecord(inner);
+    }
+  }
+  return record;
+}
+
+export function readAssistantEnvelope(raw: unknown): AssistantEnvelope {
+  if (raw === null || raw === undefined) return { kind: "empty" };
+  const record = envelopeRecord(raw);
+  if (!record) return { kind: "empty" };
+  const nonce = typeof record.nonce === "string" || typeof record.nonce === "number" ? String(record.nonce) : "";
+  if (typeof record.error === "string" && record.error.trim()) {
+    return { kind: "error", nonce, message: `Dr. Holtkamp could not answer (${record.error.trim()}). Please send again.` };
+  }
+  try {
+    if ("completion" in record) {
+      return { kind: "response", nonce, response: parseAssistantText(functionResultToText(record.completion)) };
+    }
+    // No envelope: treat the whole thing as the model's reply.
+    return { kind: "response", nonce, response: parseAssistantText(JSON.stringify(record)) };
+  } catch (error) {
+    return { kind: "error", nonce, message: error instanceof Error ? error.message : String(error) };
+  }
 }
 ----- END APPENDIX J -----
-
------ APPENDIX K: src/model/drafts.ts (wrap localStorage in try/catch) -----
-import { z } from "zod";
-import { memoSpecSchema, type MemoSpec } from "./memoSpec";
-import { profileSchema, type LetterheadProfile } from "./profiles";
-
-export const DRAFT_STORAGE_KEY = "armymemo.activeDraft.v1";
-export const DRAFT_VERSION = 1 as const;
-
-export const draftEnvelopeSchema = z.object({
-  draftVersion: z.literal(DRAFT_VERSION),
-  savedAt: z.string(),
-  spec: memoSpecSchema,
-  importedProfiles: z.array(profileSchema)
-});
-export type DraftEnvelope = z.infer<typeof draftEnvelopeSchema>;
-
-export function createDraftEnvelope(
-  spec: MemoSpec,
-  importedProfiles: LetterheadProfile[]
-): DraftEnvelope {
-  return {
-    draftVersion: DRAFT_VERSION,
-    savedAt: new Date().toISOString(),
-    spec,
-    importedProfiles
-  };
-}
-
-export function saveActiveDraft(
-  spec: MemoSpec,
-  importedProfiles: LetterheadProfile[]
-): void {
-  localStorage.setItem(
-    DRAFT_STORAGE_KEY,
-    JSON.stringify(createDraftEnvelope(spec, importedProfiles))
-  );
-}
-
-export function restoreActiveDraft(): DraftEnvelope | null {
-  const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
-  if (!stored) return null;
-  try {
-    return draftEnvelopeSchema.parse(JSON.parse(stored));
-  } catch {
-    return null;
-  }
-}
-
-export function clearActiveDraft(): void {
-  localStorage.removeItem(DRAFT_STORAGE_KEY);
-}
-
-export function exportDraft(
-  spec: MemoSpec,
-  importedProfiles: LetterheadProfile[]
-): string {
-  return JSON.stringify(createDraftEnvelope(spec, importedProfiles), null, 2);
-}
-
-export function importDraft(json: string): DraftEnvelope {
-  return draftEnvelopeSchema.parse(JSON.parse(json));
-}
------ END APPENDIX K -----
 
 ----- APPENDIX L: src/ui/CompliancePanel.tsx -----
 import type { ComplianceItem, ValidationResult } from "../validation/validate";
@@ -2525,7 +2478,7 @@ export function XIcon(props: IconProps) {
 }
 ----- END APPENDIX L -----
 
------ APPENDIX M: src/App.tsx (apply the changes in section 3.5) -----
+----- APPENDIX M: src/App.tsx (apply the changes in section 2.3; it still shows the old save/load and drawer send code — remove those as 2.3 says) -----
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { downloadDocx } from "./generator/download";
 import type { AssistantMessage } from "./assistant/schema";
@@ -3156,7 +3109,7 @@ export default function App() {
 ----- APPENDIX N: tests/fixtures.ts (synthetic test fixtures) -----
 import { SPEC_VERSION, type MemoSpec } from "./src/model/memoSpec";
 
-// In tests the seal can be null; the app uses the inline seal data URL (section 3.6).
+// In tests the seal can be null; the app uses the inline seal data URL (section 2.4).
 const seal: string | null = null;
 const addr = ["GENERAL LEONARD WOOD COMMUNITY HOSPITAL", "4234 ILLINOIS AVE #351", "FORT LEONARD WOOD, MO 65473"];
 const dha = { displayName: "DHA", orgLines: ["DEFENSE HEALTH AGENCY", ...addr], sealAssetPath: null, sealImageDataUrl: seal, letterheadStyle: "dha" as const };
@@ -4626,5 +4579,60 @@ button.compliance-item:focus,
   }
 }
 ----- END APPENDIX O -----
+
+----- APPENDIX P: src/assistant/client.test.ts (vitest) -----
+import { describe, expect, it } from "vitest";
+import { readAssistantEnvelope, memoJsonForAssistant } from "./client";
+import { applyAssistantPatch } from "./apply";
+import { createDefaultSpec } from "../model/defaultSpec";
+
+const reply = {
+  assistantMessage: "Drafted the MFR.",
+  action: "applyPatch",
+  memoPatch: { type: "mfr", subject: "Clinic Huddle Time Change", paragraphs: [{ text: "The clinic huddle moves to 0730 on Tuesdays." }] },
+  changedFields: [{ field: "type" }, { field: "subject" }, { field: "paragraphs" }],
+  warnings: [],
+  questions: []
+};
+
+describe("Workshop assistant envelope", () => {
+  it("reads a string envelope and applies the patch", () => {
+    const env = readAssistantEnvelope(JSON.stringify({ nonce: "n1", completion: JSON.stringify(reply) }));
+    expect(env.kind).toBe("response");
+    if (env.kind !== "response") return;
+    expect(env.nonce).toBe("n1");
+    const next = applyAssistantPatch(createDefaultSpec(), env.response.memoPatch!);
+    expect(next.type).toBe("mfr");
+    expect(next.subject).toBe("Clinic Huddle Time Change");
+  });
+  it("reads a double-encoded envelope with a fenced, extra-key completion", () => {
+    const completion = "```json\n" + JSON.stringify({ ...reply, extra: 1 }) + "\n```";
+    const env = readAssistantEnvelope(JSON.stringify(JSON.stringify({ nonce: 7, completion })));
+    expect(env.kind).toBe("response");
+    if (env.kind === "response") { expect(env.nonce).toBe("7"); expect(env.response.action).toBe("applyPatch"); }
+  });
+  it("reads an object envelope", () => {
+    const env = readAssistantEnvelope({ nonce: "n2", completion: JSON.stringify(reply) });
+    expect(env.kind).toBe("response");
+  });
+  it("turns an error envelope into a message", () => {
+    const env = readAssistantEnvelope('{"nonce":"n3","error":"model_timeout"}');
+    expect(env).toMatchObject({ kind: "error", nonce: "n3" });
+  });
+  it("treats empty input as empty", () => {
+    expect(readAssistantEnvelope("").kind).toBe("empty");
+    expect(readAssistantEnvelope(undefined).kind).toBe("empty");
+  });
+  it("prose completion becomes a no-change reply", () => {
+    const env = readAssistantEnvelope({ nonce: "n4", completion: "What is the subject?" });
+    expect(env.kind === "response" && env.response.action).toBe("noChange");
+  });
+  it("never sends the seal image", () => {
+    const spec = { ...createDefaultSpec() } as any;
+    spec.letterhead = { ...spec.letterhead, sealImageDataUrl: "data:image/png;base64,AAAA" };
+    expect(memoJsonForAssistant(spec)).not.toContain("base64,AAAA");
+  });
+});
+----- END APPENDIX P -----
 
 END OF BUILD PROMPT. Start with Phase 0 and the plan.
